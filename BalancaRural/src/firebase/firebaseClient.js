@@ -1,7 +1,10 @@
 import { firebaseConfig, firebaseSyncEnabled } from "./config.js";
 
 let firestoreDb = null;
-let firebaseModules = null;
+let firebaseApp = null;
+let appModule = null;
+let firestoreModule = null;
+let authModule = null;
 
 export function isFirebaseConfigured() {
   return Boolean(
@@ -17,25 +20,46 @@ export async function getFirebaseDb() {
   if (!isFirebaseConfigured()) return null;
   if (firestoreDb) return firestoreDb;
 
-  const { initializeApp, getApps, getFirestore } = await getFirebaseModules();
-  const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  const app = await getFirebaseApp();
+  const { getFirestore } = await getFirestoreModule();
   firestoreDb = getFirestore(app);
   return firestoreDb;
 }
 
-async function getFirebaseModules() {
-  if (!firebaseModules) {
-    const [appModule, firestoreModule] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js")
-    ]);
+export async function getFirebaseAuth() {
+  if (!isFirebaseConfigured()) return null;
+  const app = await getFirebaseApp();
+  const { getAuth } = await getAuthModule();
+  return getAuth(app);
+}
 
-    firebaseModules = {
-      initializeApp: appModule.initializeApp,
-      getApps: appModule.getApps,
-      getFirestore: firestoreModule.getFirestore
-    };
+async function getFirebaseApp() {
+  if (firebaseApp) return firebaseApp;
+  const { initializeApp, getApps } = await getAppModule();
+  firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  return firebaseApp;
+}
+
+async function getAppModule() {
+  if (!appModule) {
+    appModule = await import("https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js");
   }
 
-  return firebaseModules;
+  return appModule;
+}
+
+async function getFirestoreModule() {
+  if (!firestoreModule) {
+    firestoreModule = await import("https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js");
+  }
+
+  return firestoreModule;
+}
+
+export async function getAuthModule() {
+  if (!authModule) {
+    authModule = await import("https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js");
+  }
+
+  return authModule;
 }

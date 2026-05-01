@@ -19,6 +19,7 @@ import {
 import { downloadCsv, printReport } from "../services/export/exporters.js";
 import {
   initCloudSync,
+  queuePendingCloudOperation,
   syncActiveProperty,
   syncProperty,
   syncPropertyDeletion,
@@ -27,6 +28,15 @@ import {
   syncWeightRecordDeletion,
   syncWeightRecordsDeletion
 } from "../firebase/firestoreSync.js";
+import {
+  createAccountWithEmail,
+  getAuthErrorMessage,
+  observeAuthState,
+  sendResetEmail,
+  signInWithEmail,
+  signOutUser
+} from "../firebase/auth.js";
+import { clearStore, STORES } from "../data/db/indexedDb.js";
 
 const app = document.querySelector("#app");
 
@@ -43,9 +53,17 @@ const state = {
   summaryAnimal: "Todos",
   sheet: null,
   toast: "",
+  auth: {
+    status: "loading",
+    mode: "login",
+    user: null,
+    error: "",
+    message: "",
+    loading: false
+  },
   cloud: {
     enabled: false,
-    message: "Firebase não configurado."
+    message: "Aguardando login."
   }
 };
 
@@ -62,33 +80,99 @@ const icons = {
 init();
 
 async function init() {
-  await ensureValidActiveProperty();
-  state.properties = await listProperties();
-  state.activePropertyId = await getActivePropertyId();
-  if (!state.activePropertyId && state.properties[0]) {
-    state.activePropertyId = state.properties[0].id;
-    await setActivePropertyId(state.activePropertyId);
-  }
-  await refreshRecords();
   render();
   registerPwa();
   exposeDebugTools();
-  state.cloud = await initCloudSync();
+  window.addEventListener("online", handleOnline);
+  window.addEventListener("offline", handleOffline);
+  await observeAuthState(handleAuthChange);
+}
+
+async function handleOnline() {
+  if (state.auth.status !== "signed-in") return;
+  state.cloud = {
+    enabled: false,
+    message: "Sincronizando Firebase..."
+  };
+  render();
+  state.cloud = await initCloudSync(getOwnerId());
+  await refreshAll();
+}
+
+function handleOffline() {
+  if (state.auth.status !== "signed-in") return;
+  state.cloud = {
+    enabled: false,
+    message: "Offline: alterações serão sincronizadas depois."
+  };
+  render();
+}
+
+async function handleAuthChange(user) {
+  const previousUserId = state.auth.user?.uid ?? null;
+
+  if (!user) {
+    state.auth = {
+      ...state.auth,
+      status: "signed-out",
+      user: null,
+      loading: false
+    };
+    state.cloud = {
+      enabled: false,
+      message: "Aguardando login."
+    };
+    await clearVisibleData();
+    render();
+    return;
+  }
+
+  if (previousUserId && previousUserId !== user.uid) {
+    await clearVisibleData();
+  }
+
+  state.auth = {
+    ...state.auth,
+    status: "signed-in",
+    user,
+    error: "",
+    message: "",
+    loading: false
+  };
+  state.cloud = {
+    enabled: false,
+    message: navigator.onLine ? "Sincronizando Firebase..." : "Offline: usando dados locais."
+  };
+  await refreshAll();
+  state.cloud = await initCloudSync(getOwnerId());
   await refreshAll();
 }
 
 async function refreshAll() {
-  state.properties = await listProperties();
-  state.activePropertyId = await getActivePropertyId();
+  const ownerId = getOwnerId();
+  await ensureValidActiveProperty(ownerId);
+  state.properties = await listProperties(ownerId);
+  state.activePropertyId = await getActivePropertyId(ownerId);
+  if (!state.activePropertyId && state.properties[0]) {
+    state.activePropertyId = state.properties[0].id;
+    await setActivePropertyId(state.activePropertyId, ownerId);
+  }
   await refreshRecords();
   render();
 }
 
 async function refreshRecords() {
-  state.records = state.activePropertyId ? await listWeightRecords(state.activePropertyId) : [];
+  const ownerId = getOwnerId();
+  state.records = state.activePropertyId ? await listWeightRecords(state.activePropertyId, ownerId) : [];
 }
 
 function render() {
+  if (state.auth.status !== "signed-in") {
+    app.innerHTML = renderAuthScreen();
+    bindAuthEvents();
+    return;
+  }
+
   const activeProperty = getActiveProperty();
   app.innerHTML = `
     <header class="topbar">
@@ -97,7 +181,7 @@ function render() {
         <span class="property-title">${escapeHtml(activeProperty?.name ?? "Sem propriedade")}</span>
         <span aria-hidden="true">⌄</span>
       </button>
-      <button class="topbar-menu" type="button" data-action="go-properties" aria-label="Abrir propriedades">⋯</button>
+      <button class="topbar-menu" type="button" data-action="logout">Sair</button>
     </header>
 
     <main class="app-shell">
@@ -118,6 +202,63 @@ function render() {
   `;
 
   bindEvents();
+}
+
+function renderAuthScreen() {
+  const isLoading = state.auth.status === "loading";
+  const mode = state.auth.mode;
+  const titles = {
+    login: "Entrar",
+    signup: "Criar conta",
+    reset: "Recuperar senha"
+  };
+  const buttonLabels = {
+    login: "Entrar",
+    signup: "Criar conta",
+    reset: "Enviar email"
+  };
+
+  return `
+    <main class="auth-shell">
+      <section class="auth-panel">
+        <div class="auth-logo" aria-hidden="true">BR</div>
+        <h1>Balança Rural</h1>
+        <p>${isLoading ? "Verificando sessão salva neste dispositivo." : "Acesse sua conta para isolar propriedades e pesagens."}</p>
+        ${
+          isLoading
+            ? `<div class="sync-status"><span></span>Carregando autenticação...</div>`
+            : `
+              <form data-form="auth" class="auth-form">
+                <h2>${titles[mode]}</h2>
+                <div class="field">
+                  <label for="authEmail">Email</label>
+                  <input id="authEmail" name="email" type="email" autocomplete="email" placeholder="seu@email.com" />
+                </div>
+                ${
+                  mode !== "reset"
+                    ? `<div class="field">
+                        <label for="authPassword">Senha</label>
+                        <input id="authPassword" name="password" type="password" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" placeholder="Mínimo 6 caracteres" />
+                      </div>`
+                    : ""
+                }
+                ${state.auth.error ? `<div class="auth-error">${escapeHtml(state.auth.error)}</div>` : ""}
+                ${state.auth.message ? `<div class="auth-message">${escapeHtml(state.auth.message)}</div>` : ""}
+                <button class="btn green auth-submit" type="submit" ${state.auth.loading ? "disabled" : ""}>
+                  ${state.auth.loading ? "Aguarde..." : buttonLabels[mode]}
+                </button>
+              </form>
+              <div class="auth-actions">
+                ${mode !== "login" ? `<button type="button" data-auth-mode="login">Entrar</button>` : ""}
+                ${mode !== "signup" ? `<button type="button" data-auth-mode="signup">Criar conta</button>` : ""}
+                ${mode !== "reset" ? `<button type="button" data-auth-mode="reset">Esqueci a senha</button>` : ""}
+              </div>
+              <p class="auth-note">Login, criação de conta e recuperação de senha precisam de internet. Depois de entrar neste dispositivo, o uso em campo continua offline.</p>
+            `
+        }
+      </section>
+    </main>
+  `;
 }
 
 function renderSyncStatus() {
@@ -438,6 +579,63 @@ function bindEvents() {
   }
 }
 
+function bindAuthEvents() {
+  app.querySelectorAll("[data-auth-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.auth.mode = button.dataset.authMode;
+      state.auth.error = "";
+      state.auth.message = "";
+      render();
+    });
+  });
+
+  const authForm = app.querySelector("[data-form='auth']");
+  if (authForm) {
+    authForm.addEventListener("submit", handleAuthSubmit);
+  }
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const email = String(form.get("email") ?? "").trim();
+  const password = String(form.get("password") ?? "");
+
+  if (!email) {
+    state.auth.error = "Informe seu email.";
+    render();
+    return;
+  }
+
+  if (state.auth.mode !== "reset" && !password) {
+    state.auth.error = "Informe sua senha.";
+    render();
+    return;
+  }
+
+  state.auth.loading = true;
+  state.auth.error = "";
+  state.auth.message = "";
+  render();
+
+  try {
+    if (state.auth.mode === "login") {
+      await signInWithEmail(email, password);
+    } else if (state.auth.mode === "signup") {
+      await createAccountWithEmail(email, password);
+    } else {
+      await sendResetEmail(email);
+      state.auth.loading = false;
+      state.auth.message = "Email de recuperação enviado.";
+      render();
+    }
+  } catch (error) {
+    state.auth.loading = false;
+    state.auth.error = getAuthErrorMessage(error);
+    render();
+  }
+}
+
 async function handleAction(event) {
   const action = event.currentTarget.dataset.action;
   const id = event.currentTarget.dataset.id;
@@ -450,9 +648,10 @@ async function handleAction(event) {
 
   event.stopPropagation();
 
-  if (action === "go-properties") {
-    state.route = "properties";
-    render();
+  if (action === "logout") {
+    await signOutUser();
+    await clearVisibleData();
+    return;
   }
 
   if (action === "cycle-property") {
@@ -473,17 +672,18 @@ async function handleAction(event) {
   if (action === "delete-property") {
     const property = state.properties.find((item) => item.id === id);
     if (confirm(`Excluir a propriedade "${property?.name}" e suas pesagens?`)) {
-      await clearWeightHistory(id);
-      await removeProperty(id);
-      await runCloudSync(() => syncPropertyDeletion(id));
+      await clearWeightHistory(id, getOwnerId());
+      await removeProperty(id, getOwnerId());
+      const synced = await runCloudSync((ownerId) => syncPropertyDeletion(ownerId, id));
+      if (!synced) await queuePendingCloudOperation(getOwnerId(), { type: "propertyDeletion", propertyId: id });
       toast("Propriedade excluída.");
       await refreshAll();
     }
   }
 
   if (action === "select-property") {
-    await setActivePropertyId(id);
-    await runCloudSync(() => syncActiveProperty(id));
+    await setActivePropertyId(id, getOwnerId());
+    await runCloudSync((ownerId) => syncActiveProperty(ownerId, id));
     state.route = "dashboard";
     toast("Propriedade ativa alterada.");
     await refreshAll();
@@ -507,7 +707,8 @@ async function handleAction(event) {
   if (action === "delete-record") {
     if (confirm("Excluir esta pesagem?")) {
       await removeWeightRecord(id);
-      await runCloudSync(() => syncWeightRecordDeletion(id));
+      const synced = await runCloudSync((ownerId) => syncWeightRecordDeletion(ownerId, id));
+      if (!synced) await queuePendingCloudOperation(getOwnerId(), { type: "weightRecordDeletion", recordId: id });
       toast("Pesagem excluída.");
       await refreshRecords();
       render();
@@ -516,8 +717,14 @@ async function handleAction(event) {
 
   if (action === "clear-history") {
     if (state.records.length && confirm("Limpar todo o histórico desta propriedade?")) {
-      await clearWeightHistory(state.activePropertyId);
-      await runCloudSync(() => syncPropertyHistoryClear(state.activePropertyId));
+      await clearWeightHistory(state.activePropertyId, getOwnerId());
+      const synced = await runCloudSync((ownerId) => syncPropertyHistoryClear(ownerId, state.activePropertyId));
+      if (!synced) {
+        await queuePendingCloudOperation(getOwnerId(), {
+          type: "propertyHistoryClear",
+          propertyId: state.activePropertyId
+        });
+      }
       toast("Histórico limpo.");
       await refreshRecords();
       render();
@@ -529,7 +736,13 @@ async function handleAction(event) {
     if (filtered.length && confirm("Excluir todos os registros filtrados?")) {
       const ids = filtered.map((record) => record.id);
       await deleteWeightRecords(ids);
-      await runCloudSync(() => syncWeightRecordsDeletion(ids));
+      const synced = await runCloudSync((ownerId) => syncWeightRecordsDeletion(ownerId, ids));
+      if (!synced) {
+        await queuePendingCloudOperation(getOwnerId(), {
+          type: "weightRecordsDeletion",
+          recordIds: ids
+        });
+      }
       toast("Registros filtrados excluídos.");
       await refreshRecords();
       render();
@@ -556,19 +769,19 @@ async function handleWeightSubmit(event) {
 
   try {
     if (state.sheet.record) {
-      const record = await updateWeightRecord(state.sheet.record.id, { animalId, weight });
-      await runCloudSync(() => syncWeightRecord(record));
+      const record = await updateWeightRecord(state.sheet.record.id, { animalId, weight }, getOwnerId());
+      await runCloudSync((ownerId) => syncWeightRecord(ownerId, record));
       toast("Pesagem atualizada.");
     } else {
-      const activePropertyId = await getActivePropertyId();
+      const activePropertyId = await getActivePropertyId(getOwnerId());
       if (!activePropertyId) {
         state.sheet.error = "Selecione uma propriedade antes de salvar a pesagem.";
         render();
         return;
       }
       state.activePropertyId = activePropertyId;
-      const record = await createWeightRecord({ propertyId: activePropertyId, animalId, weight });
-      await runCloudSync(() => syncWeightRecord(record));
+      const record = await createWeightRecord({ propertyId: activePropertyId, animalId, weight, ownerId: getOwnerId() });
+      await runCloudSync((ownerId) => syncWeightRecord(ownerId, record));
       toast("Pesagem adicionada.");
     }
   } catch (error) {
@@ -595,15 +808,15 @@ async function handlePropertySubmit(event) {
 
   try {
     if (state.sheet.property) {
-      const property = await updateProperty(state.sheet.property.id, { name });
-      await runCloudSync(() => syncProperty(property));
+      const property = await updateProperty(state.sheet.property.id, { name }, getOwnerId());
+      await runCloudSync((ownerId) => syncProperty(ownerId, property));
       toast("Propriedade atualizada.");
     } else {
-      const property = await createProperty(name, { activate: true });
+      const property = await createProperty(name, { activate: true, ownerId: getOwnerId() });
       state.activePropertyId = property.id;
-      await runCloudSync(async () => {
-        await syncProperty(property);
-        await syncActiveProperty(property.id);
+      await runCloudSync(async (ownerId) => {
+        await syncProperty(ownerId, property);
+        await syncActiveProperty(ownerId, property.id);
       });
       state.route = "dashboard";
       toast("Propriedade criada e ativada.");
@@ -620,13 +833,15 @@ async function handlePropertySubmit(event) {
 
 function exposeDebugTools() {
   globalThis.balancaRuralDebug = async () => {
+    const ownerId = getOwnerId();
     const [properties, activePropertyId, records] = await Promise.all([
-      listProperties(),
-      getActivePropertyId(),
-      listAllWeightRecords()
+      listProperties(ownerId),
+      getActivePropertyId(ownerId),
+      listAllWeightRecords(ownerId)
     ]);
 
     return {
+      ownerId,
       activePropertyId,
       properties,
       records,
@@ -644,17 +859,18 @@ async function cycleProperty() {
 
   const currentIndex = state.properties.findIndex((property) => property.id === state.activePropertyId);
   const next = state.properties[(currentIndex + 1) % state.properties.length];
-  await setActivePropertyId(next.id);
-  await runCloudSync(() => syncActiveProperty(next.id));
+  await setActivePropertyId(next.id, getOwnerId());
+  await runCloudSync((ownerId) => syncActiveProperty(ownerId, next.id));
   toast(`Propriedade ativa: ${next.name}`);
   await refreshAll();
 }
 
 async function runCloudSync(operation) {
-  if (!state.cloud.enabled) return false;
+  const ownerId = getOwnerId();
+  if (!ownerId || !state.cloud.enabled) return false;
 
   try {
-    await operation();
+    await operation(ownerId);
     return true;
   } catch (error) {
     console.warn("Falha ao sincronizar com Firebase", error);
@@ -664,6 +880,29 @@ async function runCloudSync(operation) {
     };
     return false;
   }
+}
+
+async function clearVisibleData() {
+  await Promise.all([
+    clearStore(STORES.properties),
+    clearStore(STORES.weightRecords),
+    clearStore(STORES.appState)
+  ]);
+  state.route = "dashboard";
+  state.properties = [];
+  state.activePropertyId = null;
+  state.records = [];
+  state.filters = {
+    animalId: "",
+    from: "",
+    to: ""
+  };
+  state.summaryAnimal = "Todos";
+  state.sheet = null;
+}
+
+function getOwnerId() {
+  return state.auth.user?.uid ?? null;
 }
 
 function getActiveProperty() {

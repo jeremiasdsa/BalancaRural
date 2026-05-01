@@ -1,19 +1,23 @@
-const CACHE_NAME = "balanca-rural-v6";
+const CACHE_NAME = "balanca-rural-v8";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./public/icons/icon.svg",
-  "./src/app/main.js?v=6",
+  "./src/app/main.js?v=8",
   "./src/data/db/indexedDb.js",
   "./src/data/repositories/propertiesRepository.js",
   "./src/data/repositories/weightRecordsRepository.js",
   "./src/firebase/config.js",
+  "./src/firebase/auth.js",
   "./src/firebase/firebaseClient.js",
   "./src/firebase/firestoreSync.js",
   "./src/services/export/exporters.js",
   "./src/styles/global.css",
-  "./src/utils/id.js"
+  "./src/utils/id.js",
+  "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js",
+  "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js",
+  "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js"
 ];
 
 self.addEventListener("install", (event) => {
@@ -41,7 +45,7 @@ self.addEventListener("fetch", (event) => {
     fetch(event.request)
       .then((response) => {
         const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
         return response;
       })
       .catch(() =>

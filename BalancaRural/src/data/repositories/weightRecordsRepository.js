@@ -1,22 +1,29 @@
 import { deleteOne, getDb, readAll, readOne, STORES, writeOne } from "../db/indexedDb.js";
 import { createId } from "../../utils/id.js";
 
-export async function listWeightRecords(propertyId) {
+export async function listWeightRecords(propertyId, ownerId) {
+  if (!ownerId) return [];
   const records = await readAll(STORES.weightRecords);
   return records
-    .filter((record) => record.propertyId === propertyId)
+    .filter((record) => record.propertyId === propertyId && record.ownerId === ownerId)
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
-export async function listAllWeightRecords() {
+export async function listAllWeightRecords(ownerId) {
+  if (!ownerId) return [];
   const records = await readAll(STORES.weightRecords);
-  return records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  return records
+    .filter((record) => record.ownerId === ownerId)
+    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
-export async function createWeightRecord({ propertyId, animalId, weight }) {
+export async function createWeightRecord({ propertyId, animalId, weight, ownerId }) {
+  if (!ownerId) throw new Error("Usuário não autenticado.");
+
   const now = new Date().toISOString();
   const record = {
     id: createId("weight"),
+    ownerId,
     propertyId,
     animalId: animalId.trim(),
     weight: Number(weight),
@@ -32,9 +39,10 @@ export async function createWeightRecord({ propertyId, animalId, weight }) {
   return record;
 }
 
-export async function updateWeightRecord(id, patch) {
+export async function updateWeightRecord(id, patch, ownerId) {
+  if (!ownerId) throw new Error("Usuário não autenticado.");
   const current = await readOne(STORES.weightRecords, id);
-  if (!current) return null;
+  if (!current || current.ownerId !== ownerId) return null;
 
   const updated = {
     ...current,
@@ -52,8 +60,8 @@ export async function removeWeightRecord(id) {
   await deleteOne(STORES.weightRecords, id);
 }
 
-export async function clearWeightHistory(propertyId) {
-  const records = await listWeightRecords(propertyId);
+export async function clearWeightHistory(propertyId, ownerId) {
+  const records = await listWeightRecords(propertyId, ownerId);
   const db = await getDb();
 
   return new Promise((resolve, reject) => {
