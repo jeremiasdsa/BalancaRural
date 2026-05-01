@@ -111,6 +111,42 @@ button {
   margin: 0 auto;
 }
 
+.sync-status {
+  max-width: 620px;
+  min-height: 34px;
+  margin: 0 auto 12px;
+  padding: 0 12px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.76);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.sync-status span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.sync-status.online {
+  color: var(--green-dark);
+  border-color: rgba(22, 163, 74, 0.24);
+}
+
+.sync-status.online span {
+  background: var(--green);
+}
+
+.sync-status.offline span {
+  background: var(--yellow-dark);
+}
+
 .screen-header,
 .row-actions {
   display: flex;

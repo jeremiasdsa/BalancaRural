@@ -1,13 +1,16 @@
-const CACHE_NAME = "balanca-rural-v3";
+const CACHE_NAME = "balanca-rural-v4";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./public/icons/icon.svg",
-  "./src/app/main.js?v=3",
+  "./src/app/main.js?v=4",
   "./src/data/db/indexedDb.js",
   "./src/data/repositories/propertiesRepository.js",
   "./src/data/repositories/weightRecordsRepository.js",
+  "./src/firebase/config.js",
+  "./src/firebase/firebaseClient.js",
+  "./src/firebase/firestoreSync.js",
   "./src/services/export/exporters.js",
   "./src/styles/global.css",
   "./src/utils/id.js"

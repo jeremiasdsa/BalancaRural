@@ -17,6 +17,16 @@ import {
   updateWeightRecord
 } from "../data/repositories/weightRecordsRepository.js";
 import { downloadCsv, printReport } from "../services/export/exporters.js";
+import {
+  initCloudSync,
+  syncActiveProperty,
+  syncProperty,
+  syncPropertyDeletion,
+  syncPropertyHistoryClear,
+  syncWeightRecord,
+  syncWeightRecordDeletion,
+  syncWeightRecordsDeletion
+} from "../firebase/firestoreSync.js";
 
 const app = document.querySelector("#app");
 
@@ -32,7 +42,11 @@ const state = {
   },
   summaryAnimal: "Todos",
   sheet: null,
-  toast: ""
+  toast: "",
+  cloud: {
+    enabled: false,
+    message: "Firebase não configurado."
+  }
 };
 
 const icons = {
@@ -59,6 +73,8 @@ async function init() {
   render();
   registerPwa();
   exposeDebugTools();
+  state.cloud = await initCloudSync();
+  await refreshAll();
 }
 
 async function refreshAll() {
@@ -85,6 +101,7 @@ function render() {
     </header>
 
     <main class="app-shell">
+      ${renderSyncStatus()}
       ${renderRoute()}
     </main>
 
@@ -101,6 +118,16 @@ function render() {
   `;
 
   bindEvents();
+}
+
+function renderSyncStatus() {
+  const modifier = state.cloud.enabled ? "online" : "offline";
+  return `
+    <div class="sync-status ${modifier}">
+      <span></span>
+      ${escapeHtml(state.cloud.message)}
+    </div>
+  `;
 }
 
 function renderRoute() {
@@ -448,6 +475,7 @@ async function handleAction(event) {
     if (confirm(`Excluir a propriedade "${property?.name}" e suas pesagens?`)) {
       await clearWeightHistory(id);
       await removeProperty(id);
+      await runCloudSync(() => syncPropertyDeletion(id));
       toast("Propriedade excluída.");
       await refreshAll();
     }
@@ -455,6 +483,7 @@ async function handleAction(event) {
 
   if (action === "select-property") {
     await setActivePropertyId(id);
+    await runCloudSync(() => syncActiveProperty(id));
     state.route = "dashboard";
     toast("Propriedade ativa alterada.");
     await refreshAll();
@@ -478,6 +507,7 @@ async function handleAction(event) {
   if (action === "delete-record") {
     if (confirm("Excluir esta pesagem?")) {
       await removeWeightRecord(id);
+      await runCloudSync(() => syncWeightRecordDeletion(id));
       toast("Pesagem excluída.");
       await refreshRecords();
       render();
@@ -487,6 +517,7 @@ async function handleAction(event) {
   if (action === "clear-history") {
     if (state.records.length && confirm("Limpar todo o histórico desta propriedade?")) {
       await clearWeightHistory(state.activePropertyId);
+      await runCloudSync(() => syncPropertyHistoryClear(state.activePropertyId));
       toast("Histórico limpo.");
       await refreshRecords();
       render();
@@ -496,7 +527,9 @@ async function handleAction(event) {
   if (action === "delete-filtered") {
     const filtered = getFilteredRecords();
     if (filtered.length && confirm("Excluir todos os registros filtrados?")) {
-      await deleteWeightRecords(filtered.map((record) => record.id));
+      const ids = filtered.map((record) => record.id);
+      await deleteWeightRecords(ids);
+      await runCloudSync(() => syncWeightRecordsDeletion(ids));
       toast("Registros filtrados excluídos.");
       await refreshRecords();
       render();
@@ -523,7 +556,8 @@ async function handleWeightSubmit(event) {
 
   try {
     if (state.sheet.record) {
-      await updateWeightRecord(state.sheet.record.id, { animalId, weight });
+      const record = await updateWeightRecord(state.sheet.record.id, { animalId, weight });
+      await runCloudSync(() => syncWeightRecord(record));
       toast("Pesagem atualizada.");
     } else {
       const activePropertyId = await getActivePropertyId();
@@ -533,7 +567,8 @@ async function handleWeightSubmit(event) {
         return;
       }
       state.activePropertyId = activePropertyId;
-      await createWeightRecord({ propertyId: activePropertyId, animalId, weight });
+      const record = await createWeightRecord({ propertyId: activePropertyId, animalId, weight });
+      await runCloudSync(() => syncWeightRecord(record));
       toast("Pesagem adicionada.");
     }
   } catch (error) {
@@ -560,11 +595,16 @@ async function handlePropertySubmit(event) {
 
   try {
     if (state.sheet.property) {
-      await updateProperty(state.sheet.property.id, { name });
+      const property = await updateProperty(state.sheet.property.id, { name });
+      await runCloudSync(() => syncProperty(property));
       toast("Propriedade atualizada.");
     } else {
       const property = await createProperty(name, { activate: true });
       state.activePropertyId = property.id;
+      await runCloudSync(async () => {
+        await syncProperty(property);
+        await syncActiveProperty(property.id);
+      });
       state.route = "dashboard";
       toast("Propriedade criada e ativada.");
     }
@@ -605,8 +645,25 @@ async function cycleProperty() {
   const currentIndex = state.properties.findIndex((property) => property.id === state.activePropertyId);
   const next = state.properties[(currentIndex + 1) % state.properties.length];
   await setActivePropertyId(next.id);
+  await runCloudSync(() => syncActiveProperty(next.id));
   toast(`Propriedade ativa: ${next.name}`);
   await refreshAll();
+}
+
+async function runCloudSync(operation) {
+  if (!state.cloud.enabled) return false;
+
+  try {
+    await operation();
+    return true;
+  } catch (error) {
+    console.warn("Falha ao sincronizar com Firebase", error);
+    state.cloud = {
+      enabled: false,
+      message: "Firebase indisponível."
+    };
+    return false;
+  }
 }
 
 function getActiveProperty() {
