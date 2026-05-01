@@ -1,16 +1,52 @@
 import { getFirebaseAuth, isFirebaseConfigured } from "./firebaseClient.js";
 
+const OFFLINE_AUTH_KEY = "balancaRural.offlineAuthUser";
+
 let authModule = null;
 
 export async function observeAuthState(callback) {
   if (!isFirebaseConfigured()) {
-    callback(null);
+    callback(getOfflineAuthUser());
     return () => {};
   }
 
-  const auth = await getFirebaseAuth();
-  const { onAuthStateChanged } = await getAuthModule();
-  return onAuthStateChanged(auth, callback);
+  const offlineUser = getOfflineAuthUser();
+  let authSettled = false;
+  let fallbackSent = false;
+
+  const fallbackTimer = window.setTimeout(() => {
+    if (!authSettled && offlineUser) {
+      fallbackSent = true;
+      callback(offlineUser);
+    }
+  }, navigator.onLine ? 3000 : 500);
+
+  try {
+    const auth = await getFirebaseAuth();
+    const { onAuthStateChanged } = await getAuthModule();
+    return onAuthStateChanged(auth, (user) => {
+      authSettled = true;
+      window.clearTimeout(fallbackTimer);
+
+      if (user) {
+        saveOfflineAuthUser(user);
+        callback(user);
+        return;
+      }
+
+      clearOfflineAuthUser();
+      if (!fallbackSent) callback(null);
+    });
+  } catch (error) {
+    authSettled = true;
+    window.clearTimeout(fallbackTimer);
+    if (offlineUser && !fallbackSent) {
+      callback(offlineUser);
+      return () => {};
+    }
+    if (offlineUser) return () => {};
+    throw error;
+  }
 }
 
 export async function signInWithEmail(email, password) {
@@ -32,6 +68,7 @@ export async function sendResetEmail(email) {
 }
 
 export async function signOutUser() {
+  clearOfflineAuthUser();
   const auth = await requireAuth();
   const { signOut } = await getAuthModule();
   return signOut(auth);
@@ -66,4 +103,37 @@ async function getAuthModule() {
   }
 
   return authModule;
+}
+
+function saveOfflineAuthUser(user) {
+  try {
+    localStorage.setItem(OFFLINE_AUTH_KEY, JSON.stringify({
+      uid: user.uid,
+      email: user.email ?? ""
+    }));
+  } catch (error) {
+    console.warn("Não foi possível salvar a sessão offline.", error);
+  }
+}
+
+function getOfflineAuthUser() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(OFFLINE_AUTH_KEY) ?? "null");
+    if (!stored?.uid) return null;
+    return {
+      uid: stored.uid,
+      email: stored.email ?? "",
+      isOfflineSession: true
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearOfflineAuthUser() {
+  try {
+    localStorage.removeItem(OFFLINE_AUTH_KEY);
+  } catch (error) {
+    console.warn("Não foi possível limpar a sessão offline.", error);
+  }
 }

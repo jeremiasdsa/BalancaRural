@@ -1,10 +1,10 @@
-const CACHE_NAME = "balanca-rural-v10";
+const CACHE_NAME = "balanca-rural-v11";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./public/icons/icon.svg",
-  "./src/app/main.js?v=9",
+  "./src/app/main.js?v=10",
   "./src/data/db/indexedDb.js",
   "./src/data/repositories/propertiesRepository.js",
   "./src/data/repositories/weightRecordsRepository.js",

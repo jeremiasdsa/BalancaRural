@@ -85,7 +85,12 @@ async function init() {
   exposeDebugTools();
   window.addEventListener("online", handleOnline);
   window.addEventListener("offline", handleOffline);
-  await observeAuthState(handleAuthChange);
+  try {
+    await observeAuthState(handleAuthChange);
+  } catch (error) {
+    console.warn("Falha ao inicializar autenticação.", error);
+    await handleAuthChange(null);
+  }
 }
 
 async function handleOnline() {
@@ -144,8 +149,10 @@ async function handleAuthChange(user) {
     message: navigator.onLine ? "Sincronizando Firebase..." : "Offline: usando dados locais."
   };
   await refreshAll();
-  state.cloud = await initCloudSync(getOwnerId());
-  await refreshAll();
+  if (navigator.onLine) {
+    state.cloud = await initCloudSync(getOwnerId());
+    await refreshAll();
+  }
 }
 
 async function refreshAll() {
