@@ -571,6 +571,14 @@ button.card-main {
   font-weight: 900;
 }
 
+.report-link.blue {
+  background: var(--blue);
+}
+
+.report-link.green {
+  background: var(--green);
+}
+
 .filters {
   margin-top: 14px;
 }

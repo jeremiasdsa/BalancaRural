@@ -1,10 +1,10 @@
-const CACHE_NAME = "balanca-rural-v8";
+const CACHE_NAME = "balanca-rural-v10";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./public/icons/icon.svg",
-  "./src/app/main.js?v=8",
+  "./src/app/main.js?v=9",
   "./src/data/db/indexedDb.js",
   "./src/data/repositories/propertiesRepository.js",
   "./src/data/repositories/weightRecordsRepository.js",
@@ -13,7 +13,7 @@ const ASSETS = [
   "./src/firebase/firebaseClient.js",
   "./src/firebase/firestoreSync.js",
   "./src/services/export/exporters.js",
-  "./src/styles/global.css",
+  "./src/styles/global.css?v=2",
   "./src/utils/id.js",
   "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js",
   "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js",

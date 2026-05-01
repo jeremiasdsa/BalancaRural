@@ -16,7 +16,7 @@ import {
   removeWeightRecord,
   updateWeightRecord
 } from "../data/repositories/weightRecordsRepository.js";
-import { downloadCsv, printReport } from "../services/export/exporters.js";
+import { downloadCsv, downloadPdfReport } from "../services/export/exporters.js";
 import {
   initCloudSync,
   queuePendingCloudOperation,
@@ -399,7 +399,7 @@ function renderDetailedReport() {
 function renderSummaryReport() {
   const filtered = getFilteredRecords();
   const animals = [...new Set(state.records.map((record) => record.animalId))].sort();
-  const scoped = state.summaryAnimal === "Todos" ? filtered : filtered.filter((record) => record.animalId === state.summaryAnimal);
+  const scoped = getSummaryScopedRecords(filtered);
   const summary = calculateSummary(scoped);
   const aggregates = aggregateByAnimal(scoped);
 
@@ -965,9 +965,10 @@ function exportDetailedCsv() {
 }
 
 function exportSummaryCsv() {
+  const records = getSummaryScopedRecords(getFilteredRecords());
   const rows = [
     ["Animal", "Quantidade", "Ultimo peso kg", "Maior kg", "Menor kg", "Media kg"],
-    ...aggregateByAnimal(getFilteredRecords()).map((item) => [
+    ...aggregateByAnimal(records).map((item) => [
       item.animalId,
       item.quantity,
       item.lastWeight,
@@ -982,27 +983,50 @@ function exportSummaryCsv() {
 function exportDetailedPdf() {
   const records = getFilteredRecords();
   const summary = calculateSummary(records);
-  printReport("Relatório Detalhado", `
-    <h1>Relatório Detalhado - ${escapeHtml(getActiveProperty()?.name ?? "")}</h1>
-    ${summaryHtml(summary)}
-    <table>
-      <thead><tr><th>Animal</th><th>Data e hora</th><th>Peso</th></tr></thead>
-      <tbody>${records.map((record) => `<tr><td>${escapeHtml(record.animalId)}</td><td>${formatDateTime(record.timestamp)}</td><td>${formatNumber(record.weight)} kg</td></tr>`).join("")}</tbody>
-    </table>
-  `);
+  downloadPdfReport("relatorio-detalhado.pdf", {
+    title: "Relatório Detalhado",
+    subtitle: getActiveProperty()?.name ?? "",
+    summaryItems: getSummaryItems(summary),
+    columns: [
+      { label: "Animal", width: 18 },
+      { label: "Data e hora", width: 22 },
+      { label: "Peso", width: 14 }
+    ],
+    rows: records.map((record) => [
+      record.animalId,
+      formatDateTime(record.timestamp),
+      `${formatNumber(record.weight)} kg`
+    ])
+  });
 }
 
 function exportSummaryPdf() {
-  const aggregates = aggregateByAnimal(getFilteredRecords());
-  const summary = calculateSummary(getFilteredRecords());
-  printReport("Relatório Resumido", `
-    <h1>Relatório Resumido - ${escapeHtml(getActiveProperty()?.name ?? "")}</h1>
-    ${summaryHtml(summary)}
-    <table>
-      <thead><tr><th>Animal</th><th>Pesagens</th><th>Último peso</th><th>Média</th></tr></thead>
-      <tbody>${aggregates.map((item) => `<tr><td>${escapeHtml(item.animalId)}</td><td>${item.quantity}</td><td>${formatNumber(item.lastWeight)} kg</td><td>${formatNumber(item.average)} kg</td></tr>`).join("")}</tbody>
-    </table>
-  `);
+  const records = getSummaryScopedRecords(getFilteredRecords());
+  const aggregates = aggregateByAnimal(records);
+  const summary = calculateSummary(records);
+  downloadPdfReport("relatorio-resumido.pdf", {
+    title: "Relatório Resumido",
+    subtitle: getActiveProperty()?.name ?? "",
+    summaryItems: getSummaryItems(summary),
+    columns: [
+      { label: "Animal", width: 18 },
+      { label: "Pesagens", width: 10 },
+      { label: "Último peso", width: 14 },
+      { label: "Média", width: 14 }
+    ],
+    rows: aggregates.map((item) => [
+      item.animalId,
+      item.quantity,
+      `${formatNumber(item.lastWeight)} kg`,
+      `${formatNumber(item.average)} kg`
+    ])
+  });
+}
+
+function getSummaryScopedRecords(records) {
+  return state.summaryAnimal === "Todos"
+    ? records
+    : records.filter((record) => record.animalId === state.summaryAnimal);
 }
 
 function summaryHtml(summary) {
@@ -1015,6 +1039,16 @@ function summaryHtml(summary) {
       <div><strong>Total</strong><br>${formatNumber(summary.total)} kg</div>
     </div>
   `;
+}
+
+function getSummaryItems(summary) {
+  return [
+    ["Quantidade", summary.quantity],
+    ["Maior peso", `${formatNumber(summary.max)} kg`],
+    ["Menor peso", `${formatNumber(summary.min)} kg`],
+    ["Média", `${formatNumber(summary.average)} kg`],
+    ["Total", `${formatNumber(summary.total)} kg`]
+  ];
 }
 
 function toast(message) {
