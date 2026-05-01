@@ -67,6 +67,29 @@ export async function sendResetEmail(email) {
   return sendPasswordResetEmail(auth, email);
 }
 
+export async function resolveOnlineAuthUser(timeoutMs = 12000) {
+  const auth = await requireAuth();
+  const { onAuthStateChanged } = await getAuthModule();
+  if (auth.currentUser) {
+    saveOfflineAuthUser(auth.currentUser);
+    return auth.currentUser;
+  }
+
+  return new Promise((resolve) => {
+    let unsubscribe = () => {};
+    const timer = window.setTimeout(() => {
+      unsubscribe();
+      resolve(null);
+    }, timeoutMs);
+    unsubscribe = onAuthStateChanged(auth, (user) => {
+      window.clearTimeout(timer);
+      unsubscribe();
+      if (user) saveOfflineAuthUser(user);
+      resolve(user);
+    });
+  });
+}
+
 export async function signOutUser() {
   clearOfflineAuthUser();
   const auth = await requireAuth();

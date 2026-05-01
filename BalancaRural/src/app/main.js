@@ -32,6 +32,7 @@ import {
   createAccountWithEmail,
   getAuthErrorMessage,
   observeAuthState,
+  resolveOnlineAuthUser,
   sendResetEmail,
   signInWithEmail,
   signOutUser
@@ -52,6 +53,7 @@ const state = {
   },
   summaryAnimal: "Todos",
   sheet: null,
+  pdfPreview: null,
   toast: "",
   auth: {
     status: "loading",
@@ -97,10 +99,25 @@ async function handleOnline() {
   if (state.auth.status !== "signed-in") return;
   state.cloud = {
     enabled: false,
-    message: "Sincronizando Firebase..."
+    message: state.auth.user?.isOfflineSession ? "Restaurando sessão Firebase..." : "Sincronizando Firebase..."
   };
   render();
-  state.cloud = await initCloudSync(getOwnerId());
+
+  if (state.auth.user?.isOfflineSession) {
+    const onlineUser = await resolveOnlineAuthUser();
+    if (!onlineUser) {
+      state.cloud = {
+        enabled: false,
+        message: "Sessão Firebase indisponível. Tente abrir o app com internet."
+      };
+      render();
+      return;
+    }
+    await handleAuthChange(onlineUser);
+    return;
+  }
+
+  state.cloud = await runCloudSyncWithStatus();
   await refreshAll();
 }
 
@@ -150,9 +167,21 @@ async function handleAuthChange(user) {
   };
   await refreshAll();
   if (navigator.onLine) {
-    state.cloud = await initCloudSync(getOwnerId());
+    state.cloud = await runCloudSyncWithStatus();
     await refreshAll();
   }
+}
+
+async function runCloudSyncWithStatus() {
+  return Promise.race([
+    initCloudSync(getOwnerId()),
+    new Promise((resolve) => {
+      window.setTimeout(() => resolve({
+        enabled: false,
+        message: "Firebase demorou para responder. Dados locais preservados."
+      }), 15000);
+    })
+  ]);
 }
 
 async function refreshAll() {
@@ -205,6 +234,7 @@ function render() {
     </nav>
 
     ${state.sheet ? renderSheet() : ""}
+    ${state.pdfPreview ? renderPdfPreview() : ""}
     ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
   `;
 
@@ -496,6 +526,55 @@ function renderSheet() {
   return "";
 }
 
+function renderPdfPreview() {
+  const report = state.pdfPreview.report;
+
+  return `
+    <div class="preview-backdrop">
+      <section class="pdf-preview" role="dialog" aria-modal="true" aria-labelledby="pdf-preview-title">
+        <header class="preview-header">
+          <div>
+            <h2 id="pdf-preview-title">${escapeHtml(report.title)}</h2>
+            <p>${escapeHtml(report.subtitle || "Relatório")}</p>
+          </div>
+          <button class="btn ghost small" type="button" data-action="close-pdf-preview">Fechar</button>
+        </header>
+
+        <div class="preview-actions">
+          <button class="btn green" type="button" data-action="download-pdf-preview">${icons.check} Baixar PDF</button>
+        </div>
+
+        <div class="preview-page">
+          <h3>${escapeHtml(report.title)}</h3>
+          <p>${escapeHtml(report.subtitle || "")}</p>
+          <div class="preview-summary">
+            ${report.summaryItems.map(([label, value]) => `
+              <div>
+                <span>${escapeHtml(label)}</span>
+                <strong>${escapeHtml(value)}</strong>
+              </div>
+            `).join("")}
+          </div>
+          <div class="preview-table-wrap">
+            <table class="preview-table">
+              <thead>
+                <tr>${report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>
+              </thead>
+              <tbody>
+                ${
+                  report.rows.length
+                    ? report.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
+                    : `<tr><td colspan="${report.columns.length}">Nenhum registro encontrado.</td></tr>`
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </div>
+  `;
+}
+
 function renderWeightSheet() {
   const record = state.sheet.record;
   const isEditing = Boolean(record);
@@ -653,6 +732,12 @@ async function handleAction(event) {
     return;
   }
 
+  if (action === "close-pdf-preview") {
+    state.pdfPreview = null;
+    render();
+    return;
+  }
+
   event.stopPropagation();
 
   if (action === "logout") {
@@ -758,8 +843,9 @@ async function handleAction(event) {
 
   if (action === "export-detailed-csv") exportDetailedCsv();
   if (action === "export-summary-csv") exportSummaryCsv();
-  if (action === "export-detailed-pdf") exportDetailedPdf();
-  if (action === "export-summary-pdf") exportSummaryPdf();
+  if (action === "export-detailed-pdf") openDetailedPdfPreview();
+  if (action === "export-summary-pdf") openSummaryPdfPreview();
+  if (action === "download-pdf-preview") downloadCurrentPdfPreview();
 }
 
 async function handleWeightSubmit(event) {
@@ -906,6 +992,7 @@ async function clearVisibleData() {
   };
   state.summaryAnimal = "Todos";
   state.sheet = null;
+  state.pdfPreview = null;
 }
 
 function getOwnerId() {
@@ -987,47 +1074,68 @@ function exportSummaryCsv() {
   downloadCsv("relatorio-resumido.csv", rows);
 }
 
-function exportDetailedPdf() {
-  const records = getFilteredRecords();
-  const summary = calculateSummary(records);
-  downloadPdfReport("relatorio-detalhado.pdf", {
-    title: "Relatório Detalhado",
-    subtitle: getActiveProperty()?.name ?? "",
-    summaryItems: getSummaryItems(summary),
-    columns: [
-      { label: "Animal", width: 18 },
-      { label: "Data e hora", width: 22 },
-      { label: "Peso", width: 14 }
-    ],
-    rows: records.map((record) => [
-      record.animalId,
-      formatDateTime(record.timestamp),
-      `${formatNumber(record.weight)} kg`
-    ])
-  });
+function openDetailedPdfPreview() {
+  state.pdfPreview = createDetailedPdfPreview();
+  render();
 }
 
-function exportSummaryPdf() {
+function openSummaryPdfPreview() {
+  state.pdfPreview = createSummaryPdfPreview();
+  render();
+}
+
+function downloadCurrentPdfPreview() {
+  if (!state.pdfPreview) return;
+  downloadPdfReport(state.pdfPreview.filename, state.pdfPreview.report);
+}
+
+function createDetailedPdfPreview() {
+  const records = getFilteredRecords();
+  const summary = calculateSummary(records);
+  return {
+    filename: "relatorio-detalhado.pdf",
+    report: {
+      title: "Relatório Detalhado",
+      subtitle: getActiveProperty()?.name ?? "",
+      summaryItems: getSummaryItems(summary),
+      columns: [
+        { label: "Animal", width: 18 },
+        { label: "Data e hora", width: 22 },
+        { label: "Peso", width: 14 }
+      ],
+      rows: records.map((record) => [
+        record.animalId,
+        formatDateTime(record.timestamp),
+        `${formatNumber(record.weight)} kg`
+      ])
+    }
+  };
+}
+
+function createSummaryPdfPreview() {
   const records = getSummaryScopedRecords(getFilteredRecords());
   const aggregates = aggregateByAnimal(records);
   const summary = calculateSummary(records);
-  downloadPdfReport("relatorio-resumido.pdf", {
-    title: "Relatório Resumido",
-    subtitle: getActiveProperty()?.name ?? "",
-    summaryItems: getSummaryItems(summary),
-    columns: [
-      { label: "Animal", width: 18 },
-      { label: "Pesagens", width: 10 },
-      { label: "Último peso", width: 14 },
-      { label: "Média", width: 14 }
-    ],
-    rows: aggregates.map((item) => [
-      item.animalId,
-      item.quantity,
-      `${formatNumber(item.lastWeight)} kg`,
-      `${formatNumber(item.average)} kg`
-    ])
-  });
+  return {
+    filename: "relatorio-resumido.pdf",
+    report: {
+      title: "Relatório Resumido",
+      subtitle: getActiveProperty()?.name ?? "",
+      summaryItems: getSummaryItems(summary),
+      columns: [
+        { label: "Animal", width: 18 },
+        { label: "Pesagens", width: 10 },
+        { label: "Último peso", width: 14 },
+        { label: "Média", width: 14 }
+      ],
+      rows: aggregates.map((item) => [
+        item.animalId,
+        item.quantity,
+        `${formatNumber(item.lastWeight)} kg`,
+        `${formatNumber(item.average)} kg`
+      ])
+    }
+  };
 }
 
 function getSummaryScopedRecords(records) {
