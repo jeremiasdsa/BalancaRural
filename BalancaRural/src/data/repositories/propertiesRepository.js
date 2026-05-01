@@ -57,10 +57,14 @@ export async function setActivePropertyId(propertyId) {
   });
 }
 
-export async function ensureInitialProperty() {
+export async function ensureValidActiveProperty() {
   const properties = await listProperties();
-  if (properties.length > 0) return properties;
+  const activeId = await getActivePropertyId();
+  const activeExists = properties.some((property) => property.id === activeId);
 
-  await createProperty("Riacho do Boi");
+  if (!activeExists) {
+    await setActivePropertyId(properties[0]?.id ?? null);
+  }
+
   return listProperties();
 }

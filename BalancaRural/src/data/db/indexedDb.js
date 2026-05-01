@@ -85,3 +85,14 @@ export async function deleteOne(storeName, key) {
     tx.onerror = () => reject(tx.error);
   });
 }
+
+export async function clearStore(storeName) {
+  const db = await getDb();
+
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}

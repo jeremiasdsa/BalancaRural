@@ -78,7 +78,7 @@ Implementar a base local de dados.
 - Stores para propriedades e pesagens.
 - Repositórios locais para CRUD.
 - Controle da propriedade ativa.
-- Seed inicial opcional com `Riacho do Boi`.
+- Inicialização sem criação automática de propriedades.
 
 ### Critérios de Aceite
 
@@ -325,4 +325,3 @@ Depois do MVP:
 - Manter registros isolados por propriedade.
 - Garantir que filtros e exportações usem a mesma fonte de dados.
 - Testar reload e uso offline cedo, não apenas no final.
-

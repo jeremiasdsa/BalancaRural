@@ -1,6 +1,6 @@
 import {
   createProperty,
-  ensureInitialProperty,
+  ensureValidActiveProperty,
   getActivePropertyId,
   listProperties,
   removeProperty,
@@ -62,7 +62,7 @@ const icons = {
 init();
 
 async function init() {
-  await ensureInitialProperty();
+  await ensureValidActiveProperty();
   state.properties = await listProperties();
   state.activePropertyId = await getActivePropertyId();
   if (!state.activePropertyId && state.properties[0]) {
@@ -386,7 +386,7 @@ function renderPropertySheet() {
         <h2>${isEditing ? "Editar propriedade" : "Nova propriedade"}</h2>
         <div class="field">
           <label for="propertyName">Nome da propriedade</label>
-          <input id="propertyName" name="name" value="${escapeHtml(property?.name ?? "")}" placeholder="Ex.: Riacho do Boi" autocomplete="off" />
+          <input id="propertyName" name="name" value="${escapeHtml(property?.name ?? "")}" placeholder="Ex.: Fazenda Santa Clara" autocomplete="off" />
         </div>
         ${state.sheet.error ? `<div class="field-error">${escapeHtml(state.sheet.error)}</div>` : ""}
         <div class="row-actions" style="margin-top: 16px;">

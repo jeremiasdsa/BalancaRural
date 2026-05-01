@@ -36,7 +36,6 @@ https://balancarural.web.app
 
 - Layout mobile com top bar fixa, bottom navigation e FAB central.
 - Cadastro, edição, exclusão e seleção de propriedades.
-- Seed inicial com `Riacho do Boi`.
 - Cadastro, edição, exclusão e limpeza de pesagens por propriedade.
 - Bottom sheet para adicionar/editar pesagens.
 - Relatório detalhado com filtros, resumo, CSV e impressão/PDF.

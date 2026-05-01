@@ -1,5 +1,9 @@
-import { listProperties, setActivePropertyId } from "../data/repositories/propertiesRepository.js";
-import { writeOne, STORES } from "../data/db/indexedDb.js";
+import {
+  ensureValidActiveProperty,
+  listProperties,
+  setActivePropertyId
+} from "../data/repositories/propertiesRepository.js";
+import { clearStore, writeOne, STORES } from "../data/db/indexedDb.js";
 import { listAllWeightRecords } from "../data/repositories/weightRecordsRepository.js";
 import { getFirebaseDb, isFirebaseConfigured } from "./firebaseClient.js";
 
@@ -21,6 +25,7 @@ export async function initCloudSync() {
 
   try {
     await pullFirebaseToLocal();
+    await ensureValidActiveProperty();
     await syncAllLocalData();
     return {
       enabled: true,
@@ -133,12 +138,24 @@ async function pullFirebaseToLocal() {
     getDocs(collection(db, COLLECTIONS.appState))
   ]);
 
-  for (const propertyDoc of propertiesSnapshot.docs) {
-    await writeOne(STORES.properties, propertyDoc.data());
+  if (!propertiesSnapshot.empty) {
+    await clearStore(STORES.properties);
+    for (const propertyDoc of propertiesSnapshot.docs) {
+      await writeOne(STORES.properties, {
+        ...propertyDoc.data(),
+        id: propertyDoc.data().id || propertyDoc.id
+      });
+    }
   }
 
-  for (const recordDoc of recordsSnapshot.docs) {
-    await writeOne(STORES.weightRecords, recordDoc.data());
+  if (!recordsSnapshot.empty) {
+    await clearStore(STORES.weightRecords);
+    for (const recordDoc of recordsSnapshot.docs) {
+      await writeOne(STORES.weightRecords, {
+        ...recordDoc.data(),
+        id: recordDoc.data().id || recordDoc.id
+      });
+    }
   }
 
   const activePropertyDoc = appStateSnapshot.docs.find((item) => item.id === "activePropertyId");
