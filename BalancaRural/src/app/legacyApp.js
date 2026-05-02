@@ -1,4 +1,4 @@
-import { bindAppEvents, bindAuthEvents } from "./eventBindings.js";
+import { bindAppEvents } from "./eventBindings.js";
 import { setActivePropertyId } from "../data/repositories/propertiesRepository.js";
 import {
   syncActiveProperty,
@@ -11,7 +11,6 @@ import {
   downloadPdfPreview,
   getSummaryScopedRecords
 } from "../features/reports/reportExports.js";
-import { submitAuthForm } from "../features/auth/authForm.js";
 import { savePropertyForm } from "../features/properties/propertyForm.js";
 import { saveWeightRecordForm } from "../features/weight-records/weightRecordForm.js";
 import { aggregateByAnimal, calculateSummary } from "../features/weight-records/weightStats.js";
@@ -39,13 +38,6 @@ export function mountLegacyApp(options = {}) {
 
   initialized = true;
   init();
-}
-
-export function bindLegacyAuthEvents(rootElement) {
-  bindAuthEvents(rootElement, {
-    onAuthModeChange: handleAuthModeChange,
-    onAuthSubmit: handleAuthSubmit
-  });
 }
 
 export function bindLegacyShellEvents(rootElement) {
@@ -120,32 +112,6 @@ function render() {
     summaryReportSummary: calculateSummary(summaryRecords),
     toast: state.toast
   });
-}
-
-function handleAuthModeChange(authMode) {
-  state.auth.mode = authMode;
-  state.auth.error = "";
-  state.auth.message = "";
-  render();
-}
-
-async function handleAuthSubmit(event) {
-  event.preventDefault();
-
-  state.auth.loading = true;
-  state.auth.error = "";
-  state.auth.message = "";
-  render();
-
-  const result = await submitAuthForm({
-    formData: new FormData(event.currentTarget),
-    mode: state.auth.mode
-  });
-
-  state.auth.loading = false;
-  state.auth.error = result.ok ? "" : result.error;
-  state.auth.message = result.message ?? "";
-  render();
 }
 
 function handleRouteChange(route) {

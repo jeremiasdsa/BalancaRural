@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, ref } from "vue";
+import { nextTick, onMounted, reactive, ref } from "vue";
 import ToastMessage from "../components/feedback/ToastMessage.vue";
 import PropertySheet from "../components/forms/PropertySheet.vue";
 import WeightSheet from "../components/forms/WeightSheet.vue";
@@ -11,30 +11,62 @@ import DetailedReportScreen from "../screens/reports/detailed/DetailedReportScre
 import PropertiesScreen from "../screens/properties/PropertiesScreen.vue";
 import ReportsHomeScreen from "../screens/reports/home/ReportsHomeScreen.vue";
 import SummaryReportScreen from "../screens/reports/summary/SummaryReportScreen.vue";
-import { bindLegacyAuthEvents, bindLegacyShellEvents, mountLegacyApp } from "./legacyApp.js";
+import { submitAuthForm } from "../features/auth/authForm.js";
+import { bindLegacyShellEvents, mountLegacyApp } from "./legacyApp.js";
 
-const authRoot = ref(null);
 const shellRoot = ref(null);
-const snapshot = ref({
-  isSignedIn: false,
-  auth: {
-    status: "loading",
-    mode: "login",
-    error: "",
-    message: "",
-    loading: false
-  }
+const isSignedIn = ref(false);
+const authState = reactive({
+  status: "loading",
+  mode: "login",
+  loading: false,
+  error: "",
+  message: ""
 });
+const snapshot = ref({});
 
 function applySnapshot(nextSnapshot) {
-  snapshot.value = nextSnapshot;
-  nextTick(() => {
-    if (snapshot.value.isSignedIn) {
-      bindLegacyShellEvents(shellRoot.value);
-    } else {
-      bindLegacyAuthEvents(authRoot.value);
+  if (!nextSnapshot.isSignedIn) {
+    const wasSignedIn = isSignedIn.value;
+    isSignedIn.value = false;
+    authState.status = nextSnapshot.auth.status;
+    authState.loading = false;
+    if (wasSignedIn) {
+      authState.mode = "login";
+      authState.error = "";
+      authState.message = "";
     }
+    return;
+  }
+
+  isSignedIn.value = true;
+  snapshot.value = nextSnapshot;
+  nextTick(() => bindLegacyShellEvents(shellRoot.value));
+}
+
+function handleAuthModeChange(mode) {
+  authState.mode = mode;
+  authState.error = "";
+  authState.message = "";
+}
+
+async function handleAuthSubmit(event) {
+  event.preventDefault();
+  const mode = authState.mode;
+  authState.loading = true;
+  authState.error = "";
+  authState.message = "";
+
+  const result = await submitAuthForm({
+    formData: new FormData(event.currentTarget),
+    mode
   });
+
+  if (result.ok && mode !== "reset") return;
+
+  authState.loading = false;
+  authState.error = result.ok ? "" : result.error;
+  authState.message = result.message ?? "";
 }
 
 onMounted(() => {
@@ -43,7 +75,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div v-if="snapshot.isSignedIn" ref="shellRoot">
+  <div v-if="isSignedIn" ref="shellRoot">
     <AppChrome
       :active-property-name="snapshot.activePropertyName"
       :cloud-enabled="snapshot.cloudEnabled"
@@ -77,7 +109,7 @@ onMounted(() => {
         :selected-animal="snapshot.summaryReportSelectedAnimal"
         :summary="snapshot.summaryReportSummary"
       />
-<template #fab>
+      <template #fab>
         <span v-html="snapshot.fabContent"></span>
       </template>
       <template #overlays>
@@ -100,7 +132,11 @@ onMounted(() => {
       </template>
     </AppChrome>
   </div>
-  <div v-else ref="authRoot">
-    <AuthScreen :auth="snapshot.auth" />
+  <div v-else>
+    <AuthScreen
+      :auth="authState"
+      @submit="handleAuthSubmit"
+      @mode-change="handleAuthModeChange"
+    />
   </div>
 </template>

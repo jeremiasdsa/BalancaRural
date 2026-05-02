@@ -6,6 +6,8 @@ defineProps({
   }
 });
 
+const emit = defineEmits(["submit", "mode-change"]);
+
 const buttonLabels = {
   login: "Entrar",
   signup: "Criar conta",
@@ -22,7 +24,7 @@ const buttonLabels = {
         Carregando autenticação...
       </div>
       <template v-else>
-        <form data-form="auth" class="auth-form">
+        <form class="auth-form" @submit="emit('submit', $event)">
           <div class="field">
             <label for="authEmail">Email</label>
             <input id="authEmail" name="email" type="email" autocomplete="email" placeholder="seu@email.com" />
@@ -44,9 +46,9 @@ const buttonLabels = {
           </button>
         </form>
         <div class="auth-actions">
-          <button v-if="auth.mode !== 'login'" type="button" data-auth-mode="login">Entrar</button>
-          <button v-if="auth.mode !== 'signup'" type="button" data-auth-mode="signup">Criar conta</button>
-          <button v-if="auth.mode !== 'reset'" type="button" data-auth-mode="reset">Esqueci a senha</button>
+          <button v-if="auth.mode !== 'login'" type="button" @click="emit('mode-change', 'login')">Entrar</button>
+          <button v-if="auth.mode !== 'signup'" type="button" @click="emit('mode-change', 'signup')">Criar conta</button>
+          <button v-if="auth.mode !== 'reset'" type="button" @click="emit('mode-change', 'reset')">Esqueci a senha</button>
         </div>
         <p class="auth-note">Login, criação de conta e recuperação de senha precisam de internet. Depois de entrar neste dispositivo, o uso em campo continua offline.</p>
       </template>
