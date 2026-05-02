@@ -29,6 +29,11 @@ import {
   syncWeightRecordsDeletion
 } from "../firebase/firestoreSync.js";
 import {
+  aggregateByAnimal,
+  calculateSummary,
+  getSummaryItems
+} from "../features/weight-records/weightStats.js";
+import {
   createAccountWithEmail,
   getAuthErrorMessage,
   observeAuthState,
@@ -38,6 +43,13 @@ import {
   signOutUser
 } from "../firebase/auth.js";
 import { clearStore, STORES } from "../data/db/indexedDb.js";
+import { renderPropertyCard } from "../components/cards/propertyCard.js";
+import { renderRecordCard } from "../components/cards/recordCard.js";
+import { renderEmpty } from "../components/feedback/emptyState.js";
+import { icons } from "../components/icons/icons.js";
+import { registerPwa } from "../pwa/registerPwa.js";
+import { formatDateTime, formatNumber } from "../utils/format.js";
+import { escapeHtml } from "../utils/html.js";
 
 let app = null;
 let initialized = false;
@@ -68,16 +80,6 @@ const state = {
     enabled: false,
     message: "Aguardando login."
   }
-};
-
-const icons = {
-  plus: svg("M12 5v14M5 12h14"),
-  trash: svg("M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"),
-  pencil: svg("M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"),
-  check: svg("M20 6 9 17l-5-5"),
-  filter: svg("M4 5h16l-6 7v5l-4 2v-7L4 5Z"),
-  arrow: svg("M9 18l6-6-6-6"),
-  target: svg("M12 3v3M12 18v3M3 12h3M18 12h3M7.8 7.8l2.1 2.1M16.2 7.8l-2.1 2.1M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z")
 };
 
 export function mountLegacyApp(rootElement) {
@@ -365,44 +367,8 @@ function renderPropertiesScreen() {
         <button class="btn green small" type="button" data-action="create-property">${icons.plus} Novo</button>
       </div>
 
-      ${state.properties.map(renderPropertyCard).join("")}
+      ${state.properties.map((property, index) => renderPropertyCard(property, index, state.activePropertyId)).join("")}
     </section>
-  `;
-}
-
-function renderPropertyCard(property, index) {
-  const isActive = property.id === state.activePropertyId;
-  return `
-    <article class="card property-card ${isActive ? "active" : ""}">
-      <button class="card-main" type="button" data-action="select-property" data-id="${property.id}" aria-label="Selecionar ${escapeHtml(property.name)}">
-        <span>
-          <span class="entity-id">#${index + 1}${isActive ? " · Ativa" : ""}</span>
-          <span class="entity-name">${escapeHtml(property.name)}</span>
-        </span>
-      </button>
-      <div class="row-actions">
-        <button class="btn purple small" type="button" data-action="edit-property" data-id="${property.id}">${icons.pencil} Editar</button>
-        <button class="btn red small" type="button" data-action="delete-property" data-id="${property.id}">${icons.trash} Excluir</button>
-      </div>
-    </article>
-  `;
-}
-
-function renderRecordCard(record) {
-  return `
-    <article class="card record-card">
-      <div class="card-main">
-        <div>
-          <div class="animal-id">${escapeHtml(record.animalId)}</div>
-          <div class="record-date">${formatDateTime(record.timestamp)}</div>
-        </div>
-        <div class="weight-value">${formatNumber(record.weight)} kg</div>
-      </div>
-      <div class="row-actions">
-        <button class="btn red small" type="button" data-action="delete-record" data-id="${record.id}">${icons.trash} Excluir</button>
-        <button class="btn yellow small" type="button" data-action="edit-record" data-id="${record.id}">${icons.pencil} Editar</button>
-      </div>
-    </article>
   `;
 }
 
@@ -1025,41 +991,6 @@ function getFilteredRecords() {
   });
 }
 
-function calculateSummary(records) {
-  const weights = records.map((record) => record.weight);
-  const total = weights.reduce((sum, weight) => sum + weight, 0);
-
-  return {
-    quantity: records.length,
-    max: weights.length ? Math.max(...weights) : 0,
-    min: weights.length ? Math.min(...weights) : 0,
-    average: weights.length ? total / weights.length : 0,
-    total
-  };
-}
-
-function aggregateByAnimal(records) {
-  const groups = new Map();
-
-  records.forEach((record) => {
-    if (!groups.has(record.animalId)) groups.set(record.animalId, []);
-    groups.get(record.animalId).push(record);
-  });
-
-  return [...groups.entries()].map(([animalId, items]) => {
-    const ordered = [...items].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    const summary = calculateSummary(items);
-    return {
-      animalId,
-      quantity: summary.quantity,
-      lastWeight: ordered[0].weight,
-      max: summary.max,
-      min: summary.min,
-      average: summary.average
-    };
-  });
-}
-
 function exportDetailedCsv() {
   const rows = [
     ["Animal", "Data e hora", "Peso kg"],
@@ -1154,28 +1085,6 @@ function getSummaryScopedRecords(records) {
     : records.filter((record) => record.animalId === state.summaryAnimal);
 }
 
-function summaryHtml(summary) {
-  return `
-    <div class="summary">
-      <div><strong>Quantidade</strong><br>${summary.quantity}</div>
-      <div><strong>Maior peso</strong><br>${formatNumber(summary.max)} kg</div>
-      <div><strong>Menor peso</strong><br>${formatNumber(summary.min)} kg</div>
-      <div><strong>Média</strong><br>${formatNumber(summary.average)} kg</div>
-      <div><strong>Total</strong><br>${formatNumber(summary.total)} kg</div>
-    </div>
-  `;
-}
-
-function getSummaryItems(summary) {
-  return [
-    ["Quantidade", summary.quantity],
-    ["Maior peso", `${formatNumber(summary.max)} kg`],
-    ["Menor peso", `${formatNumber(summary.min)} kg`],
-    ["Média", `${formatNumber(summary.average)} kg`],
-    ["Total", `${formatNumber(summary.total)} kg`]
-  ];
-}
-
 function toast(message) {
   state.toast = message;
   window.clearTimeout(toast.timer);
@@ -1183,43 +1092,4 @@ function toast(message) {
     state.toast = "";
     render();
   }, 1800);
-}
-
-function renderEmpty(message) {
-  return `<div class="empty-state">${escapeHtml(message)}</div>`;
-}
-
-function formatDateTime(value) {
-  return new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
-
-function formatNumber(value) {
-  return new Intl.NumberFormat("pt-BR", {
-    maximumFractionDigits: 1
-  }).format(value || 0);
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
-
-function svg(path) {
-  return `<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`;
-}
-
-function registerPwa() {
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js").catch(() => {});
-  }
 }
