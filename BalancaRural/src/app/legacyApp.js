@@ -1,16 +1,5 @@
-import {
-  ensureValidActiveProperty,
-  getActivePropertyId,
-  listProperties,
-  setActivePropertyId
-} from "../data/repositories/propertiesRepository.js";
 import { bindAppEvents, bindAuthEvents } from "./eventBindings.js";
 import {
-  listAllWeightRecords,
-  listWeightRecords
-} from "../data/repositories/weightRecordsRepository.js";
-import {
-  initCloudSync,
   syncActiveProperty,
   syncProperty,
   syncWeightRecord
@@ -26,6 +15,9 @@ import { submitAuthForm } from "../features/auth/authForm.js";
 import { savePropertyForm } from "../features/properties/propertyForm.js";
 import { saveWeightRecordForm } from "../features/weight-records/weightRecordForm.js";
 import { handleLegacyAction } from "./actionHandlers.js";
+import { runCloudSyncOperation, runCloudSyncWithStatus } from "./cloudSync.js";
+import { loadAppData, loadWeightRecords } from "./dataLoaders.js";
+import { exposeDebugTools } from "./debugTools.js";
 import { renderRoute } from "./renderRoutes.js";
 import { createInitialState } from "./state.js";
 import { clearVisibleData as clearVisibleStoresAndState } from "./visibleData.js";
@@ -56,7 +48,7 @@ export function mountLegacyApp(rootElement) {
 async function init() {
   render();
   registerPwa();
-  exposeDebugTools();
+  exposeDebugTools(getOwnerId);
   window.addEventListener("online", handleOnline);
   window.addEventListener("offline", handleOffline);
   try {
@@ -89,7 +81,7 @@ async function handleOnline() {
     return;
   }
 
-  state.cloud = await runCloudSyncWithStatus();
+  state.cloud = await runCloudSyncWithStatus(getOwnerId());
   await refreshAll();
 }
 
@@ -139,39 +131,23 @@ async function handleAuthChange(user) {
   };
   await refreshAll();
   if (navigator.onLine) {
-    state.cloud = await runCloudSyncWithStatus();
+    state.cloud = await runCloudSyncWithStatus(getOwnerId());
     await refreshAll();
   }
 }
 
-async function runCloudSyncWithStatus() {
-  return Promise.race([
-    initCloudSync(getOwnerId()),
-    new Promise((resolve) => {
-      window.setTimeout(() => resolve({
-        enabled: false,
-        message: "Firebase demorou para responder. Dados locais preservados."
-      }), 15000);
-    })
-  ]);
-}
-
 async function refreshAll() {
   const ownerId = getOwnerId();
-  await ensureValidActiveProperty(ownerId);
-  state.properties = await listProperties(ownerId);
-  state.activePropertyId = await getActivePropertyId(ownerId);
-  if (!state.activePropertyId && state.properties[0]) {
-    state.activePropertyId = state.properties[0].id;
-    await setActivePropertyId(state.activePropertyId, ownerId);
-  }
-  await refreshRecords();
+  const data = await loadAppData(ownerId);
+  state.properties = data.properties;
+  state.activePropertyId = data.activePropertyId;
+  state.records = data.records;
   render();
 }
 
 async function refreshRecords() {
   const ownerId = getOwnerId();
-  state.records = state.activePropertyId ? await listWeightRecords(state.activePropertyId, ownerId) : [];
+  state.records = await loadWeightRecords(state.activePropertyId, ownerId);
 }
 
 function render() {
@@ -344,29 +320,6 @@ async function handlePropertySubmit(event) {
   await refreshAll();
 }
 
-function exposeDebugTools() {
-  globalThis.balancaRuralDebug = async () => {
-    const ownerId = getOwnerId();
-    const [properties, activePropertyId, records] = await Promise.all([
-      listProperties(ownerId),
-      getActivePropertyId(ownerId),
-      listAllWeightRecords(ownerId)
-    ]);
-
-    return {
-      ownerId,
-      activePropertyId,
-      properties,
-      records,
-      recordsByProperty: records.reduce((groups, record) => {
-        groups[record.propertyId] = groups[record.propertyId] || [];
-        groups[record.propertyId].push(record);
-        return groups;
-      }, {})
-    };
-  };
-}
-
 async function cycleProperty() {
   if (!state.properties.length) return;
 
@@ -379,20 +332,17 @@ async function cycleProperty() {
 }
 
 async function runCloudSync(operation) {
-  const ownerId = getOwnerId();
-  if (!ownerId || !state.cloud.enabled) return false;
-
-  try {
-    await operation(ownerId);
-    return true;
-  } catch (error) {
-    console.warn("Falha ao sincronizar com Firebase", error);
-    state.cloud = {
-      enabled: false,
-      message: "Firebase indisponível."
-    };
-    return false;
-  }
+  return runCloudSyncOperation({
+    cloud: state.cloud,
+    getOwnerId,
+    onCloudUnavailable: () => {
+      state.cloud = {
+        enabled: false,
+        message: "Firebase indisponível."
+      };
+    },
+    operation
+  });
 }
 
 async function clearVisibleData() {
