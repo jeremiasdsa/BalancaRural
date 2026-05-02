@@ -38,9 +38,7 @@ function applySnapshot(nextSnapshot) {
 }
 
 onMounted(() => {
-  mountLegacyApp(authRoot.value, {
-    onShellRender: applySnapshot
-  });
+  mountLegacyApp({ onShellRender: applySnapshot });
 });
 </script>
 
@@ -79,8 +77,7 @@ onMounted(() => {
         :selected-animal="snapshot.summaryReportSelectedAnimal"
         :summary="snapshot.summaryReportSummary"
       />
-      <div v-else v-html="snapshot.routeContent"></div>
-      <template #fab>
+<template #fab>
         <span v-html="snapshot.fabContent"></span>
       </template>
       <template #overlays>

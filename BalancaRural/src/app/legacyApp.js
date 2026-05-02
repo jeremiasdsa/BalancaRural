@@ -19,26 +19,18 @@ import { handleLegacyAction } from "./actionHandlers.js";
 import { runCloudSyncOperation } from "./cloudSync.js";
 import { loadAppData, loadWeightRecords } from "./dataLoaders.js";
 import { exposeDebugTools } from "./debugTools.js";
-import { renderRoute } from "./renderRoutes.js";
 import { initializeSessionLifecycle } from "./sessionLifecycle.js";
 import { createInitialState } from "./state.js";
 import { clearVisibleData as clearVisibleStoresAndState } from "./visibleData.js";
 import { icons } from "../components/icons/icons.js";
-import { renderPropertySheet } from "../components/forms/propertySheet.js";
-import { renderWeightSheet } from "../components/forms/weightSheet.js";
-import { renderAppChrome } from "../components/layout/appChrome.js";
-import { renderPdfPreview } from "../components/modals/pdfPreview.js";
 import { registerPwa } from "../pwa/registerPwa.js";
-import { renderAuthScreen } from "../screens/auth/authScreen.js";
 import { filterWeightRecords } from "../features/weight-records/recordFilters.js";
 
-let app = null;
 let initialized = false;
 let shellRender = null;
 const state = createInitialState();
 
-export function mountLegacyApp(rootElement, options = {}) {
-  app = rootElement;
+export function mountLegacyApp(options = {}) {
   shellRender = options.onShellRender ?? null;
   if (initialized) {
     render();
@@ -96,82 +88,38 @@ async function refreshRecords() {
 
 function render() {
   if (state.auth.status !== "signed-in") {
-    if (shellRender) {
-      shellRender({
-        isSignedIn: false,
-        auth: { ...state.auth }
-      });
-      return;
-    }
-
-    app.innerHTML = renderAuthScreen(state.auth);
-    bindLegacyAuthEvents(app);
+    shellRender({
+      isSignedIn: false,
+      auth: { ...state.auth }
+    });
     return;
   }
 
   const activeProperty = getActiveProperty();
   const filteredRecords = getFilteredRecords();
   const summaryRecords = getSummaryScopedRecords(filteredRecords, state.summaryAnimal);
-  const routeContent = renderRoute({
-    activeProperty,
-    filteredRecords,
-    state
-  });
-  if (shellRender) {
-    shellRender({
-      isSignedIn: true,
-      activePropertyName: activeProperty?.name ?? "Sem propriedade",
-      cloudEnabled: state.cloud.enabled,
-      cloudMessage: state.cloud.message,
-      activePropertyId: state.activePropertyId,
-      dashboardRecords: state.records,
-      detailedReportFilters: state.filters,
-      detailedReportRecords: filteredRecords,
-      detailedReportSummary: calculateSummary(filteredRecords),
-      fabContent: icons.target,
-      pdfPreview: state.pdfPreview,
-      properties: state.properties,
-      route: state.route,
-      routeContent,
-      sheet: state.sheet,
-      summaryReportAggregates: aggregateByAnimal(summaryRecords),
-      summaryReportAnimals: [...new Set(state.records.map((record) => record.animalId))].sort(),
-      summaryReportFilters: state.filters,
-      summaryReportSelectedAnimal: state.summaryAnimal,
-      summaryReportSummary: calculateSummary(summaryRecords),
-      toast: state.toast
-    });
-    return;
-  }
-
-  app.innerHTML = renderAppChrome({
-    activeProperty,
-    cloud: state.cloud,
-    pdfPreviewContent: state.pdfPreview ? renderPdfPreview(state.pdfPreview) : "",
+  shellRender({
+    isSignedIn: true,
+    activePropertyName: activeProperty?.name ?? "Sem propriedade",
+    cloudEnabled: state.cloud.enabled,
+    cloudMessage: state.cloud.message,
+    activePropertyId: state.activePropertyId,
+    dashboardRecords: state.records,
+    detailedReportFilters: state.filters,
+    detailedReportRecords: filteredRecords,
+    detailedReportSummary: calculateSummary(filteredRecords),
+    fabContent: icons.target,
+    pdfPreview: state.pdfPreview,
+    properties: state.properties,
     route: state.route,
-    routeContent,
-    sheetContent: state.sheet ? renderSheet() : "",
+    sheet: state.sheet,
+    summaryReportAggregates: aggregateByAnimal(summaryRecords),
+    summaryReportAnimals: [...new Set(state.records.map((record) => record.animalId))].sort(),
+    summaryReportFilters: state.filters,
+    summaryReportSelectedAnimal: state.summaryAnimal,
+    summaryReportSummary: calculateSummary(summaryRecords),
     toast: state.toast
   });
-
-  bindLegacyShellEvents(app);
-}
-
-function renderSheet() {
-  if (state.sheet.type === "weight") {
-    return renderWeightSheet({
-      activeProperty: getActiveProperty(),
-      error: state.sheet.error,
-      record: state.sheet.record
-    });
-  }
-  if (state.sheet.type === "property") {
-    return renderPropertySheet({
-      error: state.sheet.error,
-      property: state.sheet.property
-    });
-  }
-  return "";
 }
 
 function handleAuthModeChange(authMode) {
