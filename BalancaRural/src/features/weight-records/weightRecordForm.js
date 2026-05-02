@@ -6,6 +6,8 @@ import {
 
 export async function saveWeightRecordForm({ existingRecord, formData, ownerId, syncRecord }) {
   const animalId = String(formData.get("animalId") ?? "").trim();
+  const info = String(formData.get("info") ?? "").trim();
+  const sex = String(formData.get("sex") ?? "").trim();
   const weight = Number(formData.get("weight"));
 
   if (!animalId || !Number.isFinite(weight) || weight <= 0) {
@@ -14,7 +16,7 @@ export async function saveWeightRecordForm({ existingRecord, formData, ownerId, 
 
   try {
     if (existingRecord) {
-      const record = await updateWeightRecord(existingRecord.id, { animalId, weight }, ownerId);
+      const record = await updateWeightRecord(existingRecord.id, { animalId, info, sex, weight }, ownerId);
       await syncRecord(record);
       return { ok: true, message: "Pesagem atualizada." };
     }
@@ -24,7 +26,7 @@ export async function saveWeightRecordForm({ existingRecord, formData, ownerId, 
       return { ok: false, error: "Selecione uma propriedade antes de salvar a pesagem." };
     }
 
-    const record = await createWeightRecord({ propertyId: activePropertyId, animalId, weight, ownerId });
+    const record = await createWeightRecord({ propertyId: activePropertyId, animalId, info, sex, weight, ownerId });
     await syncRecord(record);
     return { ok: true, activePropertyId, message: "Pesagem adicionada." };
   } catch (error) {

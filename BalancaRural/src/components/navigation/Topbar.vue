@@ -1,4 +1,6 @@
 <script setup>
+import { icons } from "../icons/icons.js";
+
 defineProps({
   propertyName: {
     type: String,
@@ -16,6 +18,6 @@ defineEmits(["cycle-property", "logout"]);
       <span class="property-title">{{ propertyName || "Sem propriedade" }}</span>
       <span aria-hidden="true">⌄</span>
     </button>
-    <button class="topbar-menu" type="button" @click="$emit('logout')">Sair</button>
+    <button class="topbar-menu" type="button" @click="$emit('logout')" v-html="`${icons.logout} Sair`"></button>
   </header>
 </template>

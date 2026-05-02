@@ -17,7 +17,7 @@ export async function listAllWeightRecords(ownerId) {
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
-export async function createWeightRecord({ propertyId, animalId, weight, ownerId }) {
+export async function createWeightRecord({ propertyId, animalId, sex = "", info = "", weight, ownerId }) {
   if (!ownerId) throw new Error("Usuário não autenticado.");
 
   const now = new Date().toISOString();
@@ -26,6 +26,8 @@ export async function createWeightRecord({ propertyId, animalId, weight, ownerId
     ownerId,
     propertyId,
     animalId: animalId.trim(),
+    info: String(info ?? "").trim(),
+    sex: normalizeSex(sex),
     weight: Number(weight),
     timestamp: now,
     updatedAt: now
@@ -48,12 +50,19 @@ export async function updateWeightRecord(id, patch, ownerId) {
     ...current,
     ...patch,
     animalId: patch.animalId.trim(),
+    info: String(patch.info ?? "").trim(),
+    sex: normalizeSex(patch.sex),
     weight: Number(patch.weight),
     updatedAt: new Date().toISOString()
   };
 
   await writeOne(STORES.weightRecords, updated);
   return updated;
+}
+
+function normalizeSex(sex) {
+  const value = String(sex ?? "").trim().toUpperCase();
+  return value === "M" || value === "F" ? value : "";
 }
 
 export async function removeWeightRecord(id) {

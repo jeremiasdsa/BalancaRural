@@ -1,5 +1,6 @@
 <script setup>
 import RecordCard from "../../../components/cards/RecordCard.vue";
+import { icons } from "../../../components/icons/icons.js";
 import ReportFilters from "../../../components/reports/ReportFilters.vue";
 import ReportSummary from "../../../components/reports/ReportSummary.vue";
 
@@ -22,7 +23,7 @@ defineProps({
   }
 });
 
-defineEmits(["delete-filtered-records", "export-csv", "export-pdf", "filter-change"]);
+defineEmits(["delete-filtered-records", "delete-record", "edit-record", "export-csv", "export-pdf", "filter-change"]);
 </script>
 
 <template>
@@ -40,10 +41,18 @@ defineEmits(["delete-filtered-records", "export-csv", "export-pdf", "filter-chan
       <button class="btn red small" type="button" @click="$emit('delete-filtered-records')">Excluir tudo</button>
     </div>
     <ReportSummary :summary="summary" />
+
+    <div class="records-section-header">
+      <h2 v-html="`${icons.clipboard} Animais registrados`"></h2>
+      <span>{{ filteredRecords.length }} {{ filteredRecords.length === 1 ? "registro" : "registros" }}</span>
+    </div>
+
     <RecordCard
       v-for="record in filteredRecords"
       :key="record.id"
       :record="record"
+      @delete-record="$emit('delete-record', $event)"
+      @edit-record="$emit('edit-record', $event)"
     />
     <div v-if="!filteredRecords.length" class="empty-state">Nenhum registro encontrado com os filtros atuais.</div>
   </section>

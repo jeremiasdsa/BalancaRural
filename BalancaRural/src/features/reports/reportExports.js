@@ -1,6 +1,6 @@
 import { downloadCsv, downloadPdfReport } from "../../services/export/exporters.js";
 import { formatDateTime, formatNumber } from "../../utils/format.js";
-import { aggregateByAnimal, calculateSummary, getSummaryItems } from "../weight-records/weightStats.js";
+import { aggregateByAnimal, calculateSummary, formatSex, getSummaryItems } from "../weight-records/weightStats.js";
 
 export function getSummaryScopedRecords(records, selectedAnimal) {
   return selectedAnimal === "Todos"
@@ -10,8 +10,14 @@ export function getSummaryScopedRecords(records, selectedAnimal) {
 
 export function exportDetailedCsv(records) {
   const rows = [
-    ["Animal", "Data e hora", "Peso kg"],
-    ...records.map((record) => [record.animalId, formatDateTime(record.timestamp), record.weight])
+    ["Animal", "Sexo", "Data e hora", "Peso kg", "Info"],
+    ...records.map((record) => [
+      record.animalId,
+      record.sex ?? "",
+      formatDateTime(record.timestamp),
+      record.weight,
+      record.info ?? ""
+    ])
   ];
   downloadCsv("relatorio-detalhado.csv", rows);
 }
@@ -45,14 +51,18 @@ export function createDetailedPdfPreview({ activeProperty, records }) {
       subtitle: activeProperty?.name ?? "",
       summaryItems: getSummaryItems(summary),
       columns: [
-        { label: "Animal", width: 18 },
-        { label: "Data e hora", width: 22 },
-        { label: "Peso", width: 14 }
+        { label: "Animal", width: 12 },
+        { label: "Sexo", width: 6 },
+        { label: "Data e hora", width: 18 },
+        { label: "Peso", width: 10 },
+        { label: "Info", width: 22 }
       ],
       rows: records.map((record) => [
         record.animalId,
+        formatSex(record.sex),
         formatDateTime(record.timestamp),
-        `${formatNumber(record.weight)} kg`
+        `${formatNumber(record.weight)} kg`,
+        record.info ?? ""
       ])
     }
   };

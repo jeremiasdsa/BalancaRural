@@ -29,8 +29,20 @@ defineEmits(["close", "submit"]);
         <input id="animalId" name="animalId" :value="record?.animalId ?? ''" placeholder="Digite o código do animal" inputmode="numeric" autocomplete="off" />
       </div>
       <div class="field">
+        <label for="sex">Sexo</label>
+        <select id="sex" name="sex" :value="record?.sex ?? ''">
+          <option value="">Não informado</option>
+          <option value="M">Macho</option>
+          <option value="F">Fêmea</option>
+        </select>
+      </div>
+      <div class="field">
         <label for="weight">Peso</label>
         <input id="weight" name="weight" :value="record?.weight ?? ''" type="number" min="1" step="0.1" inputmode="decimal" placeholder="Peso em kg" />
+      </div>
+      <div class="field">
+        <label for="info">Info</label>
+        <textarea id="info" name="info" :value="record?.info ?? ''" placeholder="Observação livre"></textarea>
       </div>
       <div v-if="error" class="field-error">{{ error }}</div>
       <div class="row-actions" style="margin-top: 16px;">

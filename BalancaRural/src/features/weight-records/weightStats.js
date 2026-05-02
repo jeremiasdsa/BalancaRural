@@ -1,6 +1,17 @@
 import { formatNumber } from "../../utils/format.js";
 
 export function calculateSummary(records) {
+  const all = calculateWeightStats(records);
+  const male = calculateWeightStats(records.filter((record) => normalizeSex(record.sex) === "M"));
+  const female = calculateWeightStats(records.filter((record) => normalizeSex(record.sex) === "F"));
+  return {
+    ...all,
+    female,
+    male
+  };
+}
+
+function calculateWeightStats(records) {
   const weights = records.map((record) => record.weight);
   const total = weights.reduce((sum, weight) => sum + weight, 0);
 
@@ -38,9 +49,31 @@ export function aggregateByAnimal(records) {
 export function getSummaryItems(summary) {
   return [
     ["Quantidade", summary.quantity],
-    ["Maior peso", `${formatNumber(summary.max)} kg`],
+    ["Quantidade M", summary.male.quantity],
+    ["Quantidade F", summary.female.quantity],
+    ["Total", `${formatNumber(summary.total)} kg`],
+    ["Total M", `${formatNumber(summary.male.total)} kg`],
+    ["Total F", `${formatNumber(summary.female.total)} kg`],
     ["Menor peso", `${formatNumber(summary.min)} kg`],
+    ["Menor peso M", `${formatNumber(summary.male.min)} kg`],
+    ["Menor peso F", `${formatNumber(summary.female.min)} kg`],
+    ["Maior peso", `${formatNumber(summary.max)} kg`],
+    ["Maior peso M", `${formatNumber(summary.male.max)} kg`],
+    ["Maior peso F", `${formatNumber(summary.female.max)} kg`],
     ["Média", `${formatNumber(summary.average)} kg`],
-    ["Total", `${formatNumber(summary.total)} kg`]
+    ["Média M", `${formatNumber(summary.male.average)} kg`],
+    ["Média F", `${formatNumber(summary.female.average)} kg`]
   ];
+}
+
+export function formatSex(sex) {
+  const value = normalizeSex(sex);
+  if (value === "M") return "Macho";
+  if (value === "F") return "Fêmea";
+  return "";
+}
+
+export function normalizeSex(sex) {
+  const value = String(sex ?? "").trim().toUpperCase();
+  return value === "M" || value === "F" ? value : "";
 }
