@@ -259,14 +259,14 @@ function renderAuthScreen() {
     <main class="auth-shell">
       <section class="auth-panel">
         <div class="auth-logo" aria-hidden="true">BR</div>
-        <h1>Balança Rural</h1>
-        <p>${isLoading ? "Verificando sessão salva neste dispositivo." : "Acesse sua conta para isolar propriedades e pesagens."}</p>
+        <!--<h1>Balança Rural</h1>-->
+        <!--<p>${isLoading ? "Verificando sessão salva neste dispositivo." : "Acesse sua conta para isolar propriedades e pesagens."}</p>-->
         ${
           isLoading
             ? `<div class="sync-status"><span></span>Carregando autenticação...</div>`
             : `
               <form data-form="auth" class="auth-form">
-                <h2>${titles[mode]}</h2>
+                <!--<h2>${titles[mode]}</h2>-->
                 <div class="field">
                   <label for="authEmail">Email</label>
                   <input id="authEmail" name="email" type="email" autocomplete="email" placeholder="seu@email.com" />
