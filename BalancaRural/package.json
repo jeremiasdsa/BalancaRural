@@ -4,7 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "python3 -m http.server 5173",
-    "check": "node --check src/app/main.js && node --check src/data/db/indexedDb.js && node --check src/data/repositories/propertiesRepository.js && node --check src/data/repositories/weightRecordsRepository.js && node --check src/services/export/exporters.js && node --check src/utils/id.js && node --check src/firebase/config.js && node --check src/firebase/auth.js && node --check src/firebase/firebaseClient.js && node --check src/firebase/firestoreSync.js && node --check sw.js"
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "check": "node --check src/app/main.js && node --check src/app/legacyApp.js && node --check src/data/db/indexedDb.js && node --check src/data/repositories/propertiesRepository.js && node --check src/data/repositories/weightRecordsRepository.js && node --check src/services/export/exporters.js && node --check src/utils/id.js && node --check src/firebase/config.js && node --check src/firebase/auth.js && node --check src/firebase/firebaseClient.js && node --check src/firebase/firestoreSync.js && node --check public/sw.js && node --check vite.config.js"
+  },
+  "dependencies": {
+    "vue": "^3.5.33"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "vite": "^6.4.2"
   }
 }

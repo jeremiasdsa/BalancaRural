@@ -2,4 +2,6 @@ firebase-debug.log
 **/firebase-debug.log
 .firebase/
 node_modules/
+dist/
+**/dist/
 .DS_Store

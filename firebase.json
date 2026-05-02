@@ -1,7 +1,7 @@
 {
   "hosting": {
     "site": "balancarural",
-    "public": "BalancaRural",
+    "public": "BalancaRural/dist",
     "ignore": [
       "firebase.json",
       "**/.*",
