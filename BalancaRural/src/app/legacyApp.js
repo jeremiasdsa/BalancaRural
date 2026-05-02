@@ -1,32 +1,19 @@
 import {
-  createProperty,
   ensureValidActiveProperty,
   getActivePropertyId,
   listProperties,
-  removeProperty,
-  setActivePropertyId,
-  updateProperty
+  setActivePropertyId
 } from "../data/repositories/propertiesRepository.js";
 import { bindAppEvents, bindAuthEvents } from "./eventBindings.js";
 import {
-  clearWeightHistory,
-  createWeightRecord,
-  deleteWeightRecords,
   listAllWeightRecords,
-  listWeightRecords,
-  removeWeightRecord,
-  updateWeightRecord
+  listWeightRecords
 } from "../data/repositories/weightRecordsRepository.js";
 import {
   initCloudSync,
-  queuePendingCloudOperation,
   syncActiveProperty,
   syncProperty,
-  syncPropertyDeletion,
-  syncPropertyHistoryClear,
-  syncWeightRecord,
-  syncWeightRecordDeletion,
-  syncWeightRecordsDeletion
+  syncWeightRecord
 } from "../firebase/firestoreSync.js";
 import {
   aggregateByAnimal,
@@ -36,20 +23,14 @@ import {
   createDetailedPdfPreview,
   createSummaryPdfPreview,
   downloadPdfPreview,
-  exportDetailedCsv,
-  exportSummaryCsv,
   getSummaryScopedRecords
 } from "../features/reports/reportExports.js";
-import {
-  createAccountWithEmail,
-  getAuthErrorMessage,
-  observeAuthState,
-  resolveOnlineAuthUser,
-  sendResetEmail,
-  signInWithEmail,
-  signOutUser
-} from "../firebase/auth.js";
+import { observeAuthState, resolveOnlineAuthUser } from "../firebase/auth.js";
+import { submitAuthForm } from "../features/auth/authForm.js";
+import { savePropertyForm } from "../features/properties/propertyForm.js";
 import { clearStore, STORES } from "../data/db/indexedDb.js";
+import { saveWeightRecordForm } from "../features/weight-records/weightRecordForm.js";
+import { handleLegacyAction } from "./actionHandlers.js";
 import { renderPropertySheet } from "../components/forms/propertySheet.js";
 import { renderWeightSheet } from "../components/forms/weightSheet.js";
 import { renderAppChrome } from "../components/layout/appChrome.js";
@@ -326,43 +307,21 @@ function handleAuthModeChange(authMode) {
 
 async function handleAuthSubmit(event) {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
-  const email = String(form.get("email") ?? "").trim();
-  const password = String(form.get("password") ?? "");
-
-  if (!email) {
-    state.auth.error = "Informe seu email.";
-    render();
-    return;
-  }
-
-  if (state.auth.mode !== "reset" && !password) {
-    state.auth.error = "Informe sua senha.";
-    render();
-    return;
-  }
 
   state.auth.loading = true;
   state.auth.error = "";
   state.auth.message = "";
   render();
 
-  try {
-    if (state.auth.mode === "login") {
-      await signInWithEmail(email, password);
-    } else if (state.auth.mode === "signup") {
-      await createAccountWithEmail(email, password);
-    } else {
-      await sendResetEmail(email);
-      state.auth.loading = false;
-      state.auth.message = "Email de recuperação enviado.";
-      render();
-    }
-  } catch (error) {
-    state.auth.loading = false;
-    state.auth.error = getAuthErrorMessage(error);
-    render();
-  }
+  const result = await submitAuthForm({
+    formData: new FormData(event.currentTarget),
+    mode: state.auth.mode
+  });
+
+  state.auth.loading = false;
+  state.auth.error = result.ok ? "" : result.error;
+  state.auth.message = result.message ?? "";
+  render();
 }
 
 function handleRouteChange(route) {
@@ -381,166 +340,44 @@ function handleSummaryAnimalChange(value) {
 }
 
 async function handleAction(event) {
-  const action = event.currentTarget.dataset.action;
-  const id = event.currentTarget.dataset.id;
-
-  if (action === "close-sheet") {
-    state.sheet = null;
-    render();
-    return;
-  }
-
-  if (action === "close-pdf-preview") {
-    state.pdfPreview = null;
-    render();
-    return;
-  }
-
-  event.stopPropagation();
-
-  if (action === "logout") {
-    await signOutUser();
-    await clearVisibleData();
-    return;
-  }
-
-  if (action === "cycle-property") {
-    await cycleProperty();
-  }
-
-  if (action === "create-property") {
-    state.sheet = { type: "property", property: null, error: "" };
-    render();
-  }
-
-  if (action === "edit-property") {
-    const property = state.properties.find((item) => item.id === id);
-    state.sheet = { type: "property", property, error: "" };
-    render();
-  }
-
-  if (action === "delete-property") {
-    const property = state.properties.find((item) => item.id === id);
-    if (confirm(`Excluir a propriedade "${property?.name}" e suas pesagens?`)) {
-      await clearWeightHistory(id, getOwnerId());
-      await removeProperty(id, getOwnerId());
-      const synced = await runCloudSync((ownerId) => syncPropertyDeletion(ownerId, id));
-      if (!synced) await queuePendingCloudOperation(getOwnerId(), { type: "propertyDeletion", propertyId: id });
-      toast("Propriedade excluída.");
-      await refreshAll();
-    }
-  }
-
-  if (action === "select-property") {
-    await setActivePropertyId(id, getOwnerId());
-    await runCloudSync((ownerId) => syncActiveProperty(ownerId, id));
-    state.route = "dashboard";
-    toast("Propriedade ativa alterada.");
-    await refreshAll();
-  }
-
-  if (action === "open-weight-sheet") {
-    if (!state.activePropertyId) {
-      toast("Crie uma propriedade antes de registrar pesagens.");
-      return;
-    }
-    state.sheet = { type: "weight", record: null, error: "" };
-    render();
-  }
-
-  if (action === "edit-record") {
-    const record = state.records.find((item) => item.id === id);
-    state.sheet = { type: "weight", record, error: "" };
-    render();
-  }
-
-  if (action === "delete-record") {
-    if (confirm("Excluir esta pesagem?")) {
-      await removeWeightRecord(id);
-      const synced = await runCloudSync((ownerId) => syncWeightRecordDeletion(ownerId, id));
-      if (!synced) await queuePendingCloudOperation(getOwnerId(), { type: "weightRecordDeletion", recordId: id });
-      toast("Pesagem excluída.");
-      await refreshRecords();
-      render();
-    }
-  }
-
-  if (action === "clear-history") {
-    if (state.records.length && confirm("Limpar todo o histórico desta propriedade?")) {
-      await clearWeightHistory(state.activePropertyId, getOwnerId());
-      const synced = await runCloudSync((ownerId) => syncPropertyHistoryClear(ownerId, state.activePropertyId));
-      if (!synced) {
-        await queuePendingCloudOperation(getOwnerId(), {
-          type: "propertyHistoryClear",
-          propertyId: state.activePropertyId
-        });
-      }
-      toast("Histórico limpo.");
-      await refreshRecords();
-      render();
-    }
-  }
-
-  if (action === "delete-filtered") {
-    const filtered = getFilteredRecords();
-    if (filtered.length && confirm("Excluir todos os registros filtrados?")) {
-      const ids = filtered.map((record) => record.id);
-      await deleteWeightRecords(ids);
-      const synced = await runCloudSync((ownerId) => syncWeightRecordsDeletion(ownerId, ids));
-      if (!synced) {
-        await queuePendingCloudOperation(getOwnerId(), {
-          type: "weightRecordsDeletion",
-          recordIds: ids
-        });
-      }
-      toast("Registros filtrados excluídos.");
-      await refreshRecords();
-      render();
-    }
-  }
-
-  if (action === "export-detailed-csv") exportDetailedCsv(getFilteredRecords());
-  if (action === "export-summary-csv") exportSummaryCsv(getSummaryScopedRecords(getFilteredRecords(), state.summaryAnimal));
-  if (action === "export-detailed-pdf") openDetailedPdfPreview();
-  if (action === "export-summary-pdf") openSummaryPdfPreview();
-  if (action === "download-pdf-preview") downloadCurrentPdfPreview();
+  await handleLegacyAction(event, {
+    clearVisibleData,
+    cycleProperty,
+    downloadCurrentPdfPreview,
+    getFilteredRecords,
+    getOwnerId,
+    openDetailedPdfPreview,
+    openSummaryPdfPreview,
+    refreshAll,
+    refreshRecords,
+    render,
+    runCloudSync,
+    state,
+    toast
+  });
 }
 
 async function handleWeightSubmit(event) {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
-  const animalId = String(form.get("animalId") ?? "").trim();
-  const weight = Number(form.get("weight"));
 
-  if (!animalId || !Number.isFinite(weight) || weight <= 0) {
-    state.sheet.error = "Informe o código do animal e um peso válido.";
+  const result = await saveWeightRecordForm({
+    existingRecord: state.sheet.record,
+    formData: new FormData(event.currentTarget),
+    ownerId: getOwnerId(),
+    syncRecord: (record) => runCloudSync((ownerId) => syncWeightRecord(ownerId, record))
+  });
+
+  if (!result.ok) {
+    state.sheet.error = result.error;
     render();
     return;
   }
 
-  try {
-    if (state.sheet.record) {
-      const record = await updateWeightRecord(state.sheet.record.id, { animalId, weight }, getOwnerId());
-      await runCloudSync((ownerId) => syncWeightRecord(ownerId, record));
-      toast("Pesagem atualizada.");
-    } else {
-      const activePropertyId = await getActivePropertyId(getOwnerId());
-      if (!activePropertyId) {
-        state.sheet.error = "Selecione uma propriedade antes de salvar a pesagem.";
-        render();
-        return;
-      }
-      state.activePropertyId = activePropertyId;
-      const record = await createWeightRecord({ propertyId: activePropertyId, animalId, weight, ownerId: getOwnerId() });
-      await runCloudSync((ownerId) => syncWeightRecord(ownerId, record));
-      toast("Pesagem adicionada.");
-    }
-  } catch (error) {
-    state.sheet.error = error.message || "Não foi possível salvar a pesagem.";
-    render();
-    return;
+  if (result.activePropertyId) {
+    state.activePropertyId = result.activePropertyId;
   }
 
+  toast(result.message);
   state.sheet = null;
   await refreshRecords();
   render();
@@ -548,36 +385,33 @@ async function handleWeightSubmit(event) {
 
 async function handlePropertySubmit(event) {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
-  const name = String(form.get("name") ?? "").trim();
 
-  if (!name) {
-    state.sheet.error = "Informe o nome da propriedade.";
-    render();
-    return;
-  }
-
-  try {
-    if (state.sheet.property) {
-      const property = await updateProperty(state.sheet.property.id, { name }, getOwnerId());
-      await runCloudSync((ownerId) => syncProperty(ownerId, property));
-      toast("Propriedade atualizada.");
-    } else {
-      const property = await createProperty(name, { activate: true, ownerId: getOwnerId() });
-      state.activePropertyId = property.id;
-      await runCloudSync(async (ownerId) => {
+  const result = await savePropertyForm({
+    existingProperty: state.sheet.property,
+    formData: new FormData(event.currentTarget),
+    ownerId: getOwnerId(),
+    syncNewProperty: (property) =>
+      runCloudSync(async (ownerId) => {
         await syncProperty(ownerId, property);
         await syncActiveProperty(ownerId, property.id);
-      });
-      state.route = "dashboard";
-      toast("Propriedade criada e ativada.");
-    }
-  } catch (error) {
-    state.sheet.error = error.message || "Não foi possível salvar a propriedade.";
+      }),
+    syncPropertyChange: (property) => runCloudSync((ownerId) => syncProperty(ownerId, property))
+  });
+
+  if (!result.ok) {
+    state.sheet.error = result.error;
     render();
     return;
   }
 
+  if (result.activePropertyId) {
+    state.activePropertyId = result.activePropertyId;
+  }
+  if (result.route) {
+    state.route = result.route;
+  }
+
+  toast(result.message);
   state.sheet = null;
   await refreshAll();
 }
