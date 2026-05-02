@@ -10,15 +10,15 @@ import {
   downloadPdfPreview,
   getSummaryScopedRecords
 } from "../features/reports/reportExports.js";
-import { observeAuthState, resolveOnlineAuthUser } from "../firebase/auth.js";
 import { submitAuthForm } from "../features/auth/authForm.js";
 import { savePropertyForm } from "../features/properties/propertyForm.js";
 import { saveWeightRecordForm } from "../features/weight-records/weightRecordForm.js";
 import { handleLegacyAction } from "./actionHandlers.js";
-import { runCloudSyncOperation, runCloudSyncWithStatus } from "./cloudSync.js";
+import { runCloudSyncOperation } from "./cloudSync.js";
 import { loadAppData, loadWeightRecords } from "./dataLoaders.js";
 import { exposeDebugTools } from "./debugTools.js";
 import { renderRoute } from "./renderRoutes.js";
+import { initializeSessionLifecycle } from "./sessionLifecycle.js";
 import { createInitialState } from "./state.js";
 import { clearVisibleData as clearVisibleStoresAndState } from "./visibleData.js";
 import { renderPropertySheet } from "../components/forms/propertySheet.js";
@@ -49,91 +49,13 @@ async function init() {
   render();
   registerPwa();
   exposeDebugTools(getOwnerId);
-  window.addEventListener("online", handleOnline);
-  window.addEventListener("offline", handleOffline);
-  try {
-    await observeAuthState(handleAuthChange);
-  } catch (error) {
-    console.warn("Falha ao inicializar autenticação.", error);
-    await handleAuthChange(null);
-  }
-}
-
-async function handleOnline() {
-  if (state.auth.status !== "signed-in") return;
-  state.cloud = {
-    enabled: false,
-    message: state.auth.user?.isOfflineSession ? "Restaurando sessão Firebase..." : "Sincronizando Firebase..."
-  };
-  render();
-
-  if (state.auth.user?.isOfflineSession) {
-    const onlineUser = await resolveOnlineAuthUser();
-    if (!onlineUser) {
-      state.cloud = {
-        enabled: false,
-        message: "Sessão Firebase indisponível. Tente abrir o app com internet."
-      };
-      render();
-      return;
-    }
-    await handleAuthChange(onlineUser);
-    return;
-  }
-
-  state.cloud = await runCloudSyncWithStatus(getOwnerId());
-  await refreshAll();
-}
-
-function handleOffline() {
-  if (state.auth.status !== "signed-in") return;
-  state.cloud = {
-    enabled: false,
-    message: "Offline: alterações serão sincronizadas depois."
-  };
-  render();
-}
-
-async function handleAuthChange(user) {
-  const previousUserId = state.auth.user?.uid ?? null;
-
-  if (!user) {
-    state.auth = {
-      ...state.auth,
-      status: "signed-out",
-      user: null,
-      loading: false
-    };
-    state.cloud = {
-      enabled: false,
-      message: "Aguardando login."
-    };
-    await clearVisibleData();
-    render();
-    return;
-  }
-
-  if (previousUserId && previousUserId !== user.uid) {
-    await clearVisibleData();
-  }
-
-  state.auth = {
-    ...state.auth,
-    status: "signed-in",
-    user,
-    error: "",
-    message: "",
-    loading: false
-  };
-  state.cloud = {
-    enabled: false,
-    message: navigator.onLine ? "Sincronizando Firebase..." : "Offline: usando dados locais."
-  };
-  await refreshAll();
-  if (navigator.onLine) {
-    state.cloud = await runCloudSyncWithStatus(getOwnerId());
-    await refreshAll();
-  }
+  await initializeSessionLifecycle({
+    clearVisibleData,
+    getOwnerId,
+    refreshAll,
+    render,
+    state
+  });
 }
 
 async function refreshAll() {
