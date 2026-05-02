@@ -1,41 +1,57 @@
 export function bindAppEvents(root, handlers) {
+  if (!root) return;
+
   root.querySelectorAll("[data-route]").forEach((button) => {
-    button.addEventListener("click", () => handlers.onRouteChange(button.dataset.route));
+    addBoundListener(button, "route-click", "click", () => handlers.onRouteChange(button.dataset.route));
   });
 
   root.querySelectorAll("[data-action]").forEach((element) => {
-    element.addEventListener("click", handlers.onAction);
+    addBoundListener(element, "action-click", "click", handlers.onAction);
   });
 
   root.querySelectorAll("[data-filter]").forEach((input) => {
-    input.addEventListener("input", () => handlers.onFilterChange(input.dataset.filter, input.value));
+    addBoundListener(input, "filter-input", "input", () => handlers.onFilterChange(input.dataset.filter, input.value));
   });
 
   const summarySelect = root.querySelector("[data-action='summary-animal']");
   if (summarySelect) {
-    summarySelect.addEventListener("change", () => handlers.onSummaryAnimalChange(summarySelect.value));
+    addBoundListener(summarySelect, "summary-change", "change", () => handlers.onSummaryAnimalChange(summarySelect.value));
   }
 
   const weightForm = root.querySelector("[data-form='weight']");
   if (weightForm) {
-    weightForm.addEventListener("submit", handlers.onWeightSubmit);
-    weightForm.addEventListener("click", (event) => event.stopPropagation());
+    addBoundListener(weightForm, "weight-submit", "submit", handlers.onWeightSubmit);
+    addBoundListener(weightForm, "weight-click", "click", (event) => event.stopPropagation());
   }
 
   const propertyForm = root.querySelector("[data-form='property']");
   if (propertyForm) {
-    propertyForm.addEventListener("submit", handlers.onPropertySubmit);
-    propertyForm.addEventListener("click", (event) => event.stopPropagation());
+    addBoundListener(propertyForm, "property-submit", "submit", handlers.onPropertySubmit);
+    addBoundListener(propertyForm, "property-click", "click", (event) => event.stopPropagation());
   }
 }
 
 export function bindAuthEvents(root, handlers) {
+  if (!root) return;
+
   root.querySelectorAll("[data-auth-mode]").forEach((button) => {
-    button.addEventListener("click", () => handlers.onAuthModeChange(button.dataset.authMode));
+    addBoundListener(button, "auth-mode-click", "click", () => handlers.onAuthModeChange(button.dataset.authMode));
   });
 
   const authForm = root.querySelector("[data-form='auth']");
   if (authForm) {
-    authForm.addEventListener("submit", handlers.onAuthSubmit);
+    addBoundListener(authForm, "auth-submit", "submit", handlers.onAuthSubmit);
   }
+}
+
+function addBoundListener(element, key, eventName, handler) {
+  if (!element.__balancaBindings) {
+    Object.defineProperty(element, "__balancaBindings", {
+      value: new Set()
+    });
+  }
+
+  if (element.__balancaBindings.has(key)) return;
+  element.__balancaBindings.add(key);
+  element.addEventListener(eventName, handler);
 }

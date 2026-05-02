@@ -1,4 +1,5 @@
 import { bindAppEvents, bindAuthEvents } from "./eventBindings.js";
+import { setActivePropertyId } from "../data/repositories/propertiesRepository.js";
 import {
   syncActiveProperty,
   syncProperty,
@@ -21,6 +22,7 @@ import { renderRoute } from "./renderRoutes.js";
 import { initializeSessionLifecycle } from "./sessionLifecycle.js";
 import { createInitialState } from "./state.js";
 import { clearVisibleData as clearVisibleStoresAndState } from "./visibleData.js";
+import { icons } from "../components/icons/icons.js";
 import { renderPropertySheet } from "../components/forms/propertySheet.js";
 import { renderWeightSheet } from "../components/forms/weightSheet.js";
 import { renderAppChrome } from "../components/layout/appChrome.js";
@@ -32,10 +34,12 @@ import { filterWeightRecords } from "../features/weight-records/recordFilters.js
 
 let app = null;
 let initialized = false;
+let shellRender = null;
 const state = createInitialState();
 
-export function mountLegacyApp(rootElement) {
+export function mountLegacyApp(rootElement, options = {}) {
   app = rootElement;
+  shellRender = options.onShellRender ?? null;
   if (initialized) {
     render();
     return;
@@ -43,6 +47,24 @@ export function mountLegacyApp(rootElement) {
 
   initialized = true;
   init();
+}
+
+export function bindLegacyAuthEvents(rootElement) {
+  bindAuthEvents(rootElement, {
+    onAuthModeChange: handleAuthModeChange,
+    onAuthSubmit: handleAuthSubmit
+  });
+}
+
+export function bindLegacyShellEvents(rootElement) {
+  bindAppEvents(rootElement, {
+    onAction: handleAction,
+    onFilterChange: handleFilterChange,
+    onPropertySubmit: handlePropertySubmit,
+    onRouteChange: handleRouteChange,
+    onSummaryAnimalChange: handleSummaryAnimalChange,
+    onWeightSubmit: handleWeightSubmit
+  });
 }
 
 async function init() {
@@ -74,37 +96,56 @@ async function refreshRecords() {
 
 function render() {
   if (state.auth.status !== "signed-in") {
+    if (shellRender) {
+      shellRender({
+        isSignedIn: false,
+        authContent: renderAuthScreen(state.auth)
+      });
+      return;
+    }
+
     app.innerHTML = renderAuthScreen(state.auth);
-    bindAuthEvents(app, {
-      onAuthModeChange: handleAuthModeChange,
-      onAuthSubmit: handleAuthSubmit
-    });
+    bindLegacyAuthEvents(app);
     return;
   }
 
   const activeProperty = getActiveProperty();
+  const routeContent = renderRoute({
+    activeProperty,
+    filteredRecords: getFilteredRecords(),
+    state
+  });
+  const overlayContent = `
+    ${state.sheet ? renderSheet() : ""}
+    ${state.pdfPreview ? renderPdfPreview(state.pdfPreview) : ""}
+    ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
+  `;
+
+  if (shellRender) {
+    shellRender({
+      isSignedIn: true,
+      activePropertyName: activeProperty?.name ?? "Sem propriedade",
+      cloudEnabled: state.cloud.enabled,
+      cloudMessage: state.cloud.message,
+      fabContent: icons.target,
+      overlayContent,
+      route: state.route,
+      routeContent
+    });
+    return;
+  }
+
   app.innerHTML = renderAppChrome({
     activeProperty,
     cloud: state.cloud,
     pdfPreviewContent: state.pdfPreview ? renderPdfPreview(state.pdfPreview) : "",
     route: state.route,
-    routeContent: renderRoute({
-      activeProperty,
-      filteredRecords: getFilteredRecords(),
-      state
-    }),
+    routeContent,
     sheetContent: state.sheet ? renderSheet() : "",
     toast: state.toast
   });
 
-  bindAppEvents(app, {
-    onAction: handleAction,
-    onFilterChange: handleFilterChange,
-    onPropertySubmit: handlePropertySubmit,
-    onRouteChange: handleRouteChange,
-    onSummaryAnimalChange: handleSummaryAnimalChange,
-    onWeightSubmit: handleWeightSubmit
-  });
+  bindLegacyShellEvents(app);
 }
 
 function renderSheet() {
