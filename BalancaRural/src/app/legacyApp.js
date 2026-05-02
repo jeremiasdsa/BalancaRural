@@ -99,7 +99,7 @@ function render() {
     if (shellRender) {
       shellRender({
         isSignedIn: false,
-        authContent: renderAuthScreen(state.auth)
+        auth: { ...state.auth }
       });
       return;
     }

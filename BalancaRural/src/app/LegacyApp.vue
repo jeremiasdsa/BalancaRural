@@ -5,6 +5,7 @@ import PropertySheet from "../components/forms/PropertySheet.vue";
 import WeightSheet from "../components/forms/WeightSheet.vue";
 import AppChrome from "../components/layout/AppChrome.vue";
 import PdfPreview from "../components/modals/PdfPreview.vue";
+import AuthScreen from "../screens/auth/AuthScreen.vue";
 import DashboardScreen from "../screens/dashboard/DashboardScreen.vue";
 import DetailedReportScreen from "../screens/reports/detailed/DetailedReportScreen.vue";
 import PropertiesScreen from "../screens/properties/PropertiesScreen.vue";
@@ -16,7 +17,13 @@ const authRoot = ref(null);
 const shellRoot = ref(null);
 const snapshot = ref({
   isSignedIn: false,
-  authContent: ""
+  auth: {
+    status: "loading",
+    mode: "login",
+    error: "",
+    message: "",
+    loading: false
+  }
 });
 
 function applySnapshot(nextSnapshot) {
@@ -96,5 +103,7 @@ onMounted(() => {
       </template>
     </AppChrome>
   </div>
-  <div v-else ref="authRoot" v-html="snapshot.authContent"></div>
+  <div v-else ref="authRoot">
+    <AuthScreen :auth="snapshot.auth" />
+  </div>
 </template>
