@@ -43,11 +43,13 @@ import {
   signOutUser
 } from "../firebase/auth.js";
 import { clearStore, STORES } from "../data/db/indexedDb.js";
-import { renderPropertyCard } from "../components/cards/propertyCard.js";
-import { renderRecordCard } from "../components/cards/recordCard.js";
-import { renderEmpty } from "../components/feedback/emptyState.js";
 import { icons } from "../components/icons/icons.js";
 import { registerPwa } from "../pwa/registerPwa.js";
+import { renderDashboardScreen } from "../screens/dashboard/dashboardScreen.js";
+import { renderPropertiesScreen } from "../screens/properties/propertiesScreen.js";
+import { renderDetailedReportScreen } from "../screens/reports/detailed/detailedReportScreen.js";
+import { renderReportsHomeScreen } from "../screens/reports/home/reportsHomeScreen.js";
+import { renderSummaryReportScreen } from "../screens/reports/summary/summaryReportScreen.js";
 import { formatDateTime, formatNumber } from "../utils/format.js";
 import { escapeHtml } from "../utils/html.js";
 
@@ -321,92 +323,30 @@ function renderSyncStatus() {
 }
 
 function renderRoute() {
-  if (state.route === "properties") return renderPropertiesScreen();
-  if (state.route === "reports-home") return renderReportsHome();
+  if (state.route === "properties") {
+    return renderPropertiesScreen({
+      activePropertyId: state.activePropertyId,
+      properties: state.properties
+    });
+  }
+  if (state.route === "reports-home") return renderReportsHomeScreen();
   if (state.route === "reports-detailed") return renderDetailedReport();
   if (state.route === "reports-summary") return renderSummaryReport();
-  return renderDashboard();
-}
-
-function renderDashboard() {
-  const activeProperty = getActiveProperty();
-  const total = state.records.reduce((sum, record) => sum + record.weight, 0);
-
-  return `
-    <section class="screen">
-      <div class="screen-header">
-        <div>
-          <h1 class="screen-title">Pesagens</h1>
-          <p class="screen-subtitle">${escapeHtml(activeProperty?.name ?? "Crie uma propriedade")}</p>
-        </div>
-      </div>
-
-      <div class="dashboard-total">
-        <strong>${formatNumber(total)} kg</strong>
-        <span>Total registrado</span>
-      </div>
-
-      <div class="action-grid">
-        <button class="btn red" type="button" data-action="clear-history">${icons.trash} Limpar histórico</button>
-        <button class="btn green" type="button" data-action="open-weight-sheet">${icons.plus} Adicionar</button>
-      </div>
-
-      ${state.records.length ? state.records.map(renderRecordCard).join("") : renderEmpty("Nenhuma pesagem registrada para esta propriedade.")}
-    </section>
-  `;
-}
-
-function renderPropertiesScreen() {
-  return `
-    <section class="screen">
-      <div class="screen-header">
-        <div>
-          <h1 class="screen-title">Propriedades</h1>
-          <p class="screen-subtitle">Selecione onde as pesagens serão registradas.</p>
-        </div>
-        <button class="btn green small" type="button" data-action="create-property">${icons.plus} Novo</button>
-      </div>
-
-      ${state.properties.map((property, index) => renderPropertyCard(property, index, state.activePropertyId)).join("")}
-    </section>
-  `;
-}
-
-function renderReportsHome() {
-  return `
-    <section class="screen">
-      <h1 class="screen-title">Relatórios</h1>
-      <p class="screen-subtitle">Consulte, filtre e exporte as pesagens da propriedade ativa.</p>
-      <div class="report-buttons">
-        <button class="report-link blue" type="button" data-route="reports-detailed">Detalhado ${icons.arrow}</button>
-        <button class="report-link green" type="button" data-route="reports-summary">Resumido ${icons.arrow}</button>
-      </div>
-    </section>
-  `;
+  return renderDashboardScreen({
+    activeProperty: getActiveProperty(),
+    records: state.records
+  });
 }
 
 function renderDetailedReport() {
   const filtered = getFilteredRecords();
   const summary = calculateSummary(filtered);
-
-  return `
-    <section class="screen">
-      <div class="screen-header">
-        <div>
-          <h1 class="screen-title">Relatório Detalhado</h1>
-          <p class="screen-subtitle">${escapeHtml(getActiveProperty()?.name ?? "")}</p>
-        </div>
-      </div>
-      ${renderFilters()}
-      <div class="row-actions" style="margin-top: 14px;">
-        <button class="btn green small" type="button" data-action="export-detailed-csv">CSV</button>
-        <button class="btn red small" type="button" data-action="export-detailed-pdf">PDF</button>
-        <button class="btn red small" type="button" data-action="delete-filtered">Excluir tudo</button>
-      </div>
-      ${renderSummary(summary)}
-      ${filtered.length ? filtered.map(renderRecordCard).join("") : renderEmpty("Nenhum registro encontrado com os filtros atuais.")}
-    </section>
-  `;
+  return renderDetailedReportScreen({
+    activeProperty: getActiveProperty(),
+    filteredRecords: filtered,
+    filters: state.filters,
+    summary
+  });
 }
 
 function renderSummaryReport() {
@@ -415,85 +355,14 @@ function renderSummaryReport() {
   const scoped = getSummaryScopedRecords(filtered);
   const summary = calculateSummary(scoped);
   const aggregates = aggregateByAnimal(scoped);
-
-  return `
-    <section class="screen">
-      <h1 class="screen-title">Relatório Resumido</h1>
-      <p class="screen-subtitle">${escapeHtml(getActiveProperty()?.name ?? "")}</p>
-      <div class="field" style="margin-top: 14px;">
-        <label for="summary-animal">Animal</label>
-        <select id="summary-animal" data-action="summary-animal">
-          <option ${state.summaryAnimal === "Todos" ? "selected" : ""}>Todos</option>
-          ${animals.map((animal) => `<option ${state.summaryAnimal === animal ? "selected" : ""}>${escapeHtml(animal)}</option>`).join("")}
-        </select>
-      </div>
-      ${renderFilters()}
-      <div class="row-actions" style="margin-top: 14px;">
-        <button class="btn green small" type="button" data-action="export-summary-csv">CSV</button>
-        <button class="btn red small" type="button" data-action="export-summary-pdf">PDF</button>
-      </div>
-      ${renderSummary(summary)}
-      ${
-        aggregates.length
-          ? aggregates.map(renderAggregateCard).join("")
-          : renderEmpty("Nenhum dado agregado encontrado.")
-      }
-    </section>
-  `;
-}
-
-function renderFilters() {
-  return `
-    <details class="filters">
-      <summary>${icons.filter} Filtros</summary>
-      <div class="filters-panel">
-        <div class="field">
-          <label for="filter-animal">Código do Animal</label>
-          <input id="filter-animal" value="${escapeHtml(state.filters.animalId)}" placeholder="Digite o código do animal" data-filter="animalId" />
-        </div>
-        <div class="field">
-          <label for="filter-from">Data inicial</label>
-          <input id="filter-from" type="date" value="${escapeHtml(state.filters.from)}" data-filter="from" />
-        </div>
-        <div class="field">
-          <label for="filter-to">Data final</label>
-          <input id="filter-to" type="date" value="${escapeHtml(state.filters.to)}" data-filter="to" />
-        </div>
-      </div>
-    </details>
-  `;
-}
-
-function renderSummary(summary) {
-  return `
-    <div class="summary-grid">
-      <div class="summary-item"><span>Quantidade</span><strong>${summary.quantity}</strong></div>
-      <div class="summary-item"><span>Maior peso</span><strong>${formatNumber(summary.max)} kg</strong></div>
-      <div class="summary-item"><span>Menor peso</span><strong>${formatNumber(summary.min)} kg</strong></div>
-      <div class="summary-item"><span>Média</span><strong>${formatNumber(summary.average)} kg</strong></div>
-      <div class="summary-item"><span>Total</span><strong>${formatNumber(summary.total)} kg</strong></div>
-    </div>
-  `;
-}
-
-function renderAggregateCard(item) {
-  return `
-    <article class="card aggregate-card">
-      <div class="card-main">
-        <div>
-          <div class="entity-id">Animal</div>
-          <div class="entity-name">${escapeHtml(item.animalId)}</div>
-        </div>
-        <div class="weight-value">${formatNumber(item.lastWeight)} kg</div>
-      </div>
-      <div class="summary-grid">
-        <div class="summary-item"><span>Pesagens</span><strong>${item.quantity}</strong></div>
-        <div class="summary-item"><span>Média</span><strong>${formatNumber(item.average)} kg</strong></div>
-        <div class="summary-item"><span>Maior</span><strong>${formatNumber(item.max)} kg</strong></div>
-        <div class="summary-item"><span>Menor</span><strong>${formatNumber(item.min)} kg</strong></div>
-      </div>
-    </article>
-  `;
+  return renderSummaryReportScreen({
+    activeProperty: getActiveProperty(),
+    aggregates,
+    animals,
+    filters: state.filters,
+    selectedAnimal: state.summaryAnimal,
+    summary
+  });
 }
 
 function renderSheet() {
