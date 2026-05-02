@@ -16,10 +16,6 @@ import {
   syncWeightRecord
 } from "../firebase/firestoreSync.js";
 import {
-  aggregateByAnimal,
-  calculateSummary
-} from "../features/weight-records/weightStats.js";
-import {
   createDetailedPdfPreview,
   createSummaryPdfPreview,
   downloadPdfPreview,
@@ -28,52 +24,23 @@ import {
 import { observeAuthState, resolveOnlineAuthUser } from "../firebase/auth.js";
 import { submitAuthForm } from "../features/auth/authForm.js";
 import { savePropertyForm } from "../features/properties/propertyForm.js";
-import { clearStore, STORES } from "../data/db/indexedDb.js";
 import { saveWeightRecordForm } from "../features/weight-records/weightRecordForm.js";
 import { handleLegacyAction } from "./actionHandlers.js";
+import { renderRoute } from "./renderRoutes.js";
+import { createInitialState } from "./state.js";
+import { clearVisibleData as clearVisibleStoresAndState } from "./visibleData.js";
 import { renderPropertySheet } from "../components/forms/propertySheet.js";
 import { renderWeightSheet } from "../components/forms/weightSheet.js";
 import { renderAppChrome } from "../components/layout/appChrome.js";
 import { renderPdfPreview } from "../components/modals/pdfPreview.js";
 import { registerPwa } from "../pwa/registerPwa.js";
 import { renderAuthScreen } from "../screens/auth/authScreen.js";
-import { renderDashboardScreen } from "../screens/dashboard/dashboardScreen.js";
-import { renderPropertiesScreen } from "../screens/properties/propertiesScreen.js";
-import { renderDetailedReportScreen } from "../screens/reports/detailed/detailedReportScreen.js";
-import { renderReportsHomeScreen } from "../screens/reports/home/reportsHomeScreen.js";
-import { renderSummaryReportScreen } from "../screens/reports/summary/summaryReportScreen.js";
 import { escapeHtml } from "../utils/html.js";
+import { filterWeightRecords } from "../features/weight-records/recordFilters.js";
 
 let app = null;
 let initialized = false;
-
-const state = {
-  route: "dashboard",
-  properties: [],
-  activePropertyId: null,
-  records: [],
-  filters: {
-    animalId: "",
-    from: "",
-    to: ""
-  },
-  summaryAnimal: "Todos",
-  sheet: null,
-  pdfPreview: null,
-  toast: "",
-  auth: {
-    status: "loading",
-    mode: "login",
-    user: null,
-    error: "",
-    message: "",
-    loading: false
-  },
-  cloud: {
-    enabled: false,
-    message: "Aguardando login."
-  }
-};
+const state = createInitialState();
 
 export function mountLegacyApp(rootElement) {
   app = rootElement;
@@ -223,7 +190,11 @@ function render() {
     cloud: state.cloud,
     pdfPreviewContent: state.pdfPreview ? renderPdfPreview(state.pdfPreview) : "",
     route: state.route,
-    routeContent: renderRoute(),
+    routeContent: renderRoute({
+      activeProperty,
+      filteredRecords: getFilteredRecords(),
+      state
+    }),
     sheetContent: state.sheet ? renderSheet() : "",
     toast: state.toast
   });
@@ -235,49 +206,6 @@ function render() {
     onRouteChange: handleRouteChange,
     onSummaryAnimalChange: handleSummaryAnimalChange,
     onWeightSubmit: handleWeightSubmit
-  });
-}
-
-function renderRoute() {
-  if (state.route === "properties") {
-    return renderPropertiesScreen({
-      activePropertyId: state.activePropertyId,
-      properties: state.properties
-    });
-  }
-  if (state.route === "reports-home") return renderReportsHomeScreen();
-  if (state.route === "reports-detailed") return renderDetailedReport();
-  if (state.route === "reports-summary") return renderSummaryReport();
-  return renderDashboardScreen({
-    activeProperty: getActiveProperty(),
-    records: state.records
-  });
-}
-
-function renderDetailedReport() {
-  const filtered = getFilteredRecords();
-  const summary = calculateSummary(filtered);
-  return renderDetailedReportScreen({
-    activeProperty: getActiveProperty(),
-    filteredRecords: filtered,
-    filters: state.filters,
-    summary
-  });
-}
-
-function renderSummaryReport() {
-  const filtered = getFilteredRecords();
-  const animals = [...new Set(state.records.map((record) => record.animalId))].sort();
-  const scoped = getSummaryScopedRecords(filtered, state.summaryAnimal);
-  const summary = calculateSummary(scoped);
-  const aggregates = aggregateByAnimal(scoped);
-  return renderSummaryReportScreen({
-    activeProperty: getActiveProperty(),
-    aggregates,
-    animals,
-    filters: state.filters,
-    selectedAnimal: state.summaryAnimal,
-    summary
   });
 }
 
@@ -468,23 +396,7 @@ async function runCloudSync(operation) {
 }
 
 async function clearVisibleData() {
-  await Promise.all([
-    clearStore(STORES.properties),
-    clearStore(STORES.weightRecords),
-    clearStore(STORES.appState)
-  ]);
-  state.route = "dashboard";
-  state.properties = [];
-  state.activePropertyId = null;
-  state.records = [];
-  state.filters = {
-    animalId: "",
-    from: "",
-    to: ""
-  };
-  state.summaryAnimal = "Todos";
-  state.sheet = null;
-  state.pdfPreview = null;
+  await clearVisibleStoresAndState(state);
 }
 
 function getOwnerId() {
@@ -496,15 +408,7 @@ function getActiveProperty() {
 }
 
 function getFilteredRecords() {
-  return state.records.filter((record) => {
-    const animalMatches = state.filters.animalId
-      ? record.animalId.toLowerCase().includes(state.filters.animalId.toLowerCase())
-      : true;
-    const recordDate = record.timestamp.slice(0, 10);
-    const fromMatches = state.filters.from ? recordDate >= state.filters.from : true;
-    const toMatches = state.filters.to ? recordDate <= state.filters.to : true;
-    return animalMatches && fromMatches && toMatches;
-  });
+  return filterWeightRecords(state.records, state.filters);
 }
 
 function openDetailedPdfPreview() {
