@@ -70,6 +70,7 @@ export async function sendResetEmail(email) {
 export async function resolveOnlineAuthUser(timeoutMs = 12000) {
   const auth = await requireAuth();
   const { onAuthStateChanged } = await getAuthModule();
+  const offlineUser = getOfflineAuthUser();
   if (auth.currentUser) {
     saveOfflineAuthUser(auth.currentUser);
     return auth.currentUser;
@@ -82,10 +83,19 @@ export async function resolveOnlineAuthUser(timeoutMs = 12000) {
       resolve(null);
     }, timeoutMs);
     unsubscribe = onAuthStateChanged(auth, (user) => {
-      window.clearTimeout(timer);
-      unsubscribe();
-      if (user) saveOfflineAuthUser(user);
-      resolve(user);
+      if (user) {
+        window.clearTimeout(timer);
+        unsubscribe();
+        saveOfflineAuthUser(user);
+        resolve(user);
+        return;
+      }
+
+      if (!offlineUser) {
+        window.clearTimeout(timer);
+        unsubscribe();
+        resolve(null);
+      }
     });
   });
 }

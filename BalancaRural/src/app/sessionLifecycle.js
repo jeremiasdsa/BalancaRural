@@ -1,6 +1,11 @@
 import { observeAuthState, resolveOnlineAuthUser } from "../firebase/auth.js";
 import { runCloudSyncWithStatus } from "./cloudSync.js";
 
+const AUTH_RESTORE_ATTEMPTS = 5;
+const AUTH_RESTORE_RETRY_DELAY_MS = 4000;
+
+let onlineSyncInFlight = null;
+
 export async function initializeSessionLifecycle({
   clearVisibleData,
   getOwnerId,
@@ -16,15 +21,27 @@ export async function initializeSessionLifecycle({
     state
   });
 
-  window.addEventListener("online", () =>
-    handleOnline({
+  const handleOnlineRequest = () => {
+    if (onlineSyncInFlight || state.auth.status !== "signed-in") return;
+
+    onlineSyncInFlight = handleOnline({
       getOwnerId,
       handleAuthChange,
       refreshAll,
       render,
       state
-    })
-  );
+    }).finally(() => {
+      onlineSyncInFlight = null;
+    });
+  };
+
+  window.addEventListener("online", handleOnlineRequest);
+  window.addEventListener("focus", () => {
+    if (shouldRetryOnlineSync(state)) handleOnlineRequest();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && shouldRetryOnlineSync(state)) handleOnlineRequest();
+  });
   window.addEventListener("offline", () => handleOffline({ render, state }));
 
   try {
@@ -88,11 +105,11 @@ async function handleOnline({ getOwnerId, handleAuthChange, refreshAll, render, 
   render();
 
   if (state.auth.user?.isOfflineSession) {
-    const onlineUser = await resolveOnlineAuthUser();
+    const onlineUser = await restoreOnlineAuthUser({ render, state });
     if (!onlineUser) {
       state.cloud = {
         enabled: false,
-        message: "Sessão Firebase indisponível. Tente abrir o app com internet."
+        message: "Firebase ainda indisponível. Seus dados locais serão sincronizados quando a sessão voltar."
       };
       render();
       return;
@@ -103,6 +120,35 @@ async function handleOnline({ getOwnerId, handleAuthChange, refreshAll, render, 
 
   state.cloud = await runCloudSyncWithStatus(getOwnerId());
   await refreshAll();
+}
+
+async function restoreOnlineAuthUser({ render, state }) {
+  for (let attempt = 1; attempt <= AUTH_RESTORE_ATTEMPTS; attempt += 1) {
+    const onlineUser = await resolveOnlineAuthUser();
+    if (onlineUser) return onlineUser;
+
+    if (!navigator.onLine) return null;
+    if (attempt === AUTH_RESTORE_ATTEMPTS) break;
+
+    state.cloud = {
+      enabled: false,
+      message: `Restaurando sessão Firebase... tentativa ${attempt + 1}/${AUTH_RESTORE_ATTEMPTS}`
+    };
+    render();
+    await delay(AUTH_RESTORE_RETRY_DELAY_MS);
+  }
+
+  return null;
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+function shouldRetryOnlineSync(state) {
+  return navigator.onLine && state.auth.status === "signed-in" && (!state.cloud.enabled || state.auth.user?.isOfflineSession);
 }
 
 function handleOffline({ render, state }) {
