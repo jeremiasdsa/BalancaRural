@@ -14,7 +14,6 @@ defineEmits(["navigate"]);
     <button
       class="nav-btn"
       :class="{ active: route === 'properties' }"
-      data-route="properties"
       type="button"
       @click="$emit('navigate', 'properties')"
     >
@@ -24,7 +23,6 @@ defineEmits(["navigate"]);
     <button
       class="nav-btn"
       :class="{ active: route.startsWith('reports') }"
-      data-route="reports-home"
       type="button"
       @click="$emit('navigate', 'reports-home')"
     >

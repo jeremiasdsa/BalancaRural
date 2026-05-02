@@ -8,6 +8,8 @@ defineProps({
     required: true
   }
 });
+
+defineEmits(["delete-record", "edit-record"]);
 </script>
 
 <template>
@@ -20,8 +22,8 @@ defineProps({
       <div class="weight-value">{{ formatNumber(record.weight) }} kg</div>
     </div>
     <div class="row-actions">
-      <button class="btn red small" type="button" data-action="delete-record" :data-id="record.id" v-html="`${icons.trash} Excluir`"></button>
-      <button class="btn yellow small" type="button" data-action="edit-record" :data-id="record.id" v-html="`${icons.pencil} Editar`"></button>
+      <button class="btn red small" type="button" @click="$emit('delete-record', record.id)" v-html="`${icons.trash} Excluir`"></button>
+      <button class="btn yellow small" type="button" @click="$emit('edit-record', record.id)" v-html="`${icons.pencil} Editar`"></button>
     </div>
   </article>
 </template>

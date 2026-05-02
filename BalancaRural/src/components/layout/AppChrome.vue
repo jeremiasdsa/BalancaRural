@@ -39,7 +39,6 @@ defineEmits(["cycle-property", "logout", "navigate", "open-weight-sheet"]);
 
   <button
     class="fab"
-    data-action="open-weight-sheet"
     type="button"
     aria-label="Adicionar pesagem"
     @click="$emit('open-weight-sheet')"

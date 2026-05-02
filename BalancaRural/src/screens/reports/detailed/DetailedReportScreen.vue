@@ -21,6 +21,8 @@ defineProps({
     required: true
   }
 });
+
+defineEmits(["delete-filtered-records", "export-csv", "export-pdf", "filter-change"]);
 </script>
 
 <template>
@@ -31,11 +33,11 @@ defineProps({
         <p class="screen-subtitle">{{ activePropertyName }}</p>
       </div>
     </div>
-    <ReportFilters :filters="filters" />
+    <ReportFilters :filters="filters" @filter-change="(...args) => $emit('filter-change', ...args)" />
     <div class="row-actions" style="margin-top: 14px;">
-      <button class="btn green small" type="button" data-action="export-detailed-csv">CSV</button>
-      <button class="btn red small" type="button" data-action="export-detailed-pdf">PDF</button>
-      <button class="btn red small" type="button" data-action="delete-filtered">Excluir tudo</button>
+      <button class="btn green small" type="button" @click="$emit('export-csv')">CSV</button>
+      <button class="btn red small" type="button" @click="$emit('export-pdf')">PDF</button>
+      <button class="btn red small" type="button" @click="$emit('delete-filtered-records')">Excluir tudo</button>
     </div>
     <ReportSummary :summary="summary" />
     <RecordCard

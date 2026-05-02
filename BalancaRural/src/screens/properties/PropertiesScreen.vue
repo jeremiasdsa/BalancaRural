@@ -12,6 +12,8 @@ defineProps({
     default: () => []
   }
 });
+
+defineEmits(["create-property", "delete-property", "edit-property", "select-property"]);
 </script>
 
 <template>
@@ -21,7 +23,7 @@ defineProps({
         <h1 class="screen-title">Propriedades</h1>
         <p class="screen-subtitle">Selecione onde as pesagens serão registradas.</p>
       </div>
-      <button class="btn green small" type="button" data-action="create-property" v-html="`${icons.plus} Novo`"></button>
+      <button class="btn green small" type="button" @click="$emit('create-property')" v-html="`${icons.plus} Novo`"></button>
     </div>
 
     <PropertyCard
@@ -30,6 +32,9 @@ defineProps({
       :active-property-id="activePropertyId"
       :index="index"
       :property="property"
+      @delete-property="$emit('delete-property', $event)"
+      @edit-property="$emit('edit-property', $event)"
+      @select-property="$emit('select-property', $event)"
     />
   </section>
 </template>

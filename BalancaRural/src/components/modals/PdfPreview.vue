@@ -7,6 +7,8 @@ defineProps({
     required: true
   }
 });
+
+defineEmits(["close", "download"]);
 </script>
 
 <template>
@@ -17,11 +19,11 @@ defineProps({
           <h2 id="pdf-preview-title">{{ pdfPreview.report.title }}</h2>
           <p>{{ pdfPreview.report.subtitle || "Relatório" }}</p>
         </div>
-        <button class="btn ghost small" type="button" data-action="close-pdf-preview">Fechar</button>
+        <button class="btn ghost small" type="button" @click="$emit('close')">Fechar</button>
       </header>
 
       <div class="preview-actions">
-        <button class="btn green" type="button" data-action="download-pdf-preview" v-html="`${icons.check} Baixar PDF`"></button>
+        <button class="btn green" type="button" @click="$emit('download')" v-html="`${icons.check} Baixar PDF`"></button>
       </div>
 
       <div class="preview-page">

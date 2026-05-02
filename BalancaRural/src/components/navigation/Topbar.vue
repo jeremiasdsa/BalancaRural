@@ -12,10 +12,10 @@ defineEmits(["cycle-property", "logout"]);
 <template>
   <header class="topbar">
     <div class="logo" aria-hidden="true">BR</div>
-    <button class="property-switcher" data-action="cycle-property" type="button" @click="$emit('cycle-property')">
+    <button class="property-switcher" type="button" @click="$emit('cycle-property')">
       <span class="property-title">{{ propertyName || "Sem propriedade" }}</span>
       <span aria-hidden="true">⌄</span>
     </button>
-    <button class="topbar-menu" data-action="logout" type="button" @click="$emit('logout')">Sair</button>
+    <button class="topbar-menu" type="button" @click="$emit('logout')">Sair</button>
   </header>
 </template>

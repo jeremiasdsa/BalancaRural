@@ -29,6 +29,8 @@ defineProps({
     required: true
   }
 });
+
+defineEmits(["export-csv", "export-pdf", "filter-change", "summary-animal-change"]);
 </script>
 
 <template>
@@ -37,7 +39,11 @@ defineProps({
     <p class="screen-subtitle">{{ activePropertyName }}</p>
     <div class="field" style="margin-top: 14px;">
       <label for="summary-animal">Animal</label>
-      <select id="summary-animal" data-action="summary-animal" :value="selectedAnimal">
+      <select
+        id="summary-animal"
+        :value="selectedAnimal"
+        @change="$emit('summary-animal-change', $event.target.value)"
+      >
         <option>Todos</option>
         <option
           v-for="animal in animals"
@@ -48,10 +54,10 @@ defineProps({
         </option>
       </select>
     </div>
-    <ReportFilters :filters="filters" />
+    <ReportFilters :filters="filters" @filter-change="(...args) => $emit('filter-change', ...args)" />
     <div class="row-actions" style="margin-top: 14px;">
-      <button class="btn green small" type="button" data-action="export-summary-csv">CSV</button>
-      <button class="btn red small" type="button" data-action="export-summary-pdf">PDF</button>
+      <button class="btn green small" type="button" @click="$emit('export-csv')">CSV</button>
+      <button class="btn red small" type="button" @click="$emit('export-pdf')">PDF</button>
     </div>
     <ReportSummary :summary="summary" />
     <AggregateCard

@@ -1,7 +1,7 @@
 <script setup>
-import LegacyApp from "./LegacyApp.vue";
+import AppShell from "./AppShell.vue";
 </script>
 
 <template>
-  <LegacyApp />
+  <AppShell />
 </template>

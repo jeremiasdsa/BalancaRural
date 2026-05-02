@@ -13,6 +13,8 @@ const props = defineProps({
     default: () => []
   }
 });
+
+defineEmits(["clear-history", "delete-record", "edit-record", "open-weight-sheet"]);
 </script>
 
 <template>
@@ -30,14 +32,16 @@ const props = defineProps({
     </div>
 
     <div class="action-grid">
-      <button class="btn red" type="button" data-action="clear-history" v-html="`${icons.trash} Limpar histórico`"></button>
-      <button class="btn green" type="button" data-action="open-weight-sheet" v-html="`${icons.plus} Adicionar`"></button>
+      <button class="btn red" type="button" @click="$emit('clear-history')" v-html="`${icons.trash} Limpar histórico`"></button>
+      <button class="btn green" type="button" @click="$emit('open-weight-sheet')" v-html="`${icons.plus} Adicionar`"></button>
     </div>
 
     <RecordCard
       v-for="record in records"
       :key="record.id"
       :record="record"
+      @delete-record="$emit('delete-record', $event)"
+      @edit-record="$emit('edit-record', $event)"
     />
     <div v-if="!records.length" class="empty-state">Nenhuma pesagem registrada para esta propriedade.</div>
   </section>

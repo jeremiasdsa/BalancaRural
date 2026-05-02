@@ -15,6 +15,8 @@ defineProps({
     required: true
   }
 });
+
+defineEmits(["delete-property", "edit-property", "select-property"]);
 </script>
 
 <template>
@@ -22,18 +24,17 @@ defineProps({
     <button
       class="card-main"
       type="button"
-      data-action="select-property"
-      :data-id="property.id"
       :aria-label="`Selecionar ${property.name}`"
+      @click="$emit('select-property', property.id)"
     >
       <span>
-        <span class="entity-id">#{{ index + 1 }}{{ property.id === activePropertyId ? " · Ativa" : "" }}</span>
+        <span class="entity-id">#{{ index + 1 }}{{ property.id === activePropertyId ? " · Ativa " : " " }}</span>
         <span class="entity-name">{{ property.name }}</span>
       </span>
     </button>
     <div class="row-actions">
-      <button class="btn purple small" type="button" data-action="edit-property" :data-id="property.id" v-html="`${icons.pencil} Editar`"></button>
-      <button class="btn red small" type="button" data-action="delete-property" :data-id="property.id" v-html="`${icons.trash} Excluir`"></button>
+      <button class="btn purple small" type="button" @click="$emit('edit-property', property.id)" v-html="`${icons.pencil} Editar`"></button>
+      <button class="btn red small" type="button" @click="$emit('delete-property', property.id)" v-html="`${icons.trash} Excluir`"></button>
     </div>
   </article>
 </template>

@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import ToastMessage from "../components/feedback/ToastMessage.vue";
 import PropertySheet from "../components/forms/PropertySheet.vue";
 import WeightSheet from "../components/forms/WeightSheet.vue";
@@ -12,9 +12,33 @@ import PropertiesScreen from "../screens/properties/PropertiesScreen.vue";
 import ReportsHomeScreen from "../screens/reports/home/ReportsHomeScreen.vue";
 import SummaryReportScreen from "../screens/reports/summary/SummaryReportScreen.vue";
 import { submitAuthForm } from "../features/auth/authForm.js";
-import { bindLegacyShellEvents, mountLegacyApp } from "./legacyApp.js";
+import {
+  clearHistory,
+  closePdfPreview,
+  closeSheet,
+  createProperty,
+  cycleActiveProperty,
+  deleteFilteredRecords,
+  deleteProperty,
+  deleteRecord,
+  downloadPdfPreview,
+  editProperty,
+  editRecord,
+  exportDetailedCsv,
+  exportSummaryCsv,
+  logout,
+  mountAppController,
+  navigateRoute,
+  openDetailedPdfPreview,
+  openSummaryPdfPreview,
+  openWeightSheet,
+  selectProperty,
+  submitPropertyForm,
+  submitWeightForm,
+  updateFilter,
+  updateSummaryAnimal
+} from "./appController.js";
 
-const shellRoot = ref(null);
 const isSignedIn = ref(false);
 const authState = reactive({
   status: "loading",
@@ -41,7 +65,6 @@ function applySnapshot(nextSnapshot) {
 
   isSignedIn.value = true;
   snapshot.value = nextSnapshot;
-  nextTick(() => bindLegacyShellEvents(shellRoot.value));
 }
 
 function handleAuthModeChange(mode) {
@@ -70,35 +93,51 @@ async function handleAuthSubmit(event) {
 }
 
 onMounted(() => {
-  mountLegacyApp({ onShellRender: applySnapshot });
+  mountAppController({ onShellRender: applySnapshot });
 });
 </script>
 
 <template>
-  <div v-if="isSignedIn" ref="shellRoot">
+  <div v-if="isSignedIn">
     <AppChrome
       :active-property-name="snapshot.activePropertyName"
       :cloud-enabled="snapshot.cloudEnabled"
       :cloud-message="snapshot.cloudMessage"
       :route="snapshot.route"
+      @cycle-property="cycleActiveProperty"
+      @logout="logout"
+      @navigate="navigateRoute"
+      @open-weight-sheet="openWeightSheet"
     >
       <DashboardScreen
         v-if="snapshot.route === 'dashboard'"
         :active-property-name="snapshot.activePropertyName"
         :records="snapshot.dashboardRecords"
+        @clear-history="clearHistory"
+        @delete-record="deleteRecord"
+        @edit-record="editRecord"
+        @open-weight-sheet="openWeightSheet"
       />
       <PropertiesScreen
         v-else-if="snapshot.route === 'properties'"
         :active-property-id="snapshot.activePropertyId"
         :properties="snapshot.properties"
+        @create-property="createProperty"
+        @delete-property="deleteProperty"
+        @edit-property="editProperty"
+        @select-property="selectProperty"
       />
-      <ReportsHomeScreen v-else-if="snapshot.route === 'reports-home'" />
+      <ReportsHomeScreen v-else-if="snapshot.route === 'reports-home'" @navigate="navigateRoute" />
       <DetailedReportScreen
         v-else-if="snapshot.route === 'reports-detailed'"
         :active-property-name="snapshot.activePropertyName"
         :filtered-records="snapshot.detailedReportRecords"
         :filters="snapshot.detailedReportFilters"
         :summary="snapshot.detailedReportSummary"
+        @delete-filtered-records="deleteFilteredRecords"
+        @export-csv="exportDetailedCsv"
+        @export-pdf="openDetailedPdfPreview"
+        @filter-change="updateFilter"
       />
       <SummaryReportScreen
         v-else-if="snapshot.route === 'reports-summary'"
@@ -108,6 +147,10 @@ onMounted(() => {
         :filters="snapshot.summaryReportFilters"
         :selected-animal="snapshot.summaryReportSelectedAnimal"
         :summary="snapshot.summaryReportSummary"
+        @export-csv="exportSummaryCsv"
+        @export-pdf="openSummaryPdfPreview"
+        @filter-change="updateFilter"
+        @summary-animal-change="updateSummaryAnimal"
       />
       <template #fab>
         <span v-html="snapshot.fabContent"></span>
@@ -118,15 +161,21 @@ onMounted(() => {
           :active-property-name="snapshot.activePropertyName"
           :error="snapshot.sheet.error"
           :record="snapshot.sheet.record"
+          @close="closeSheet"
+          @submit="submitWeightForm"
         />
         <PropertySheet
           v-if="snapshot.sheet?.type === 'property'"
           :error="snapshot.sheet.error"
           :property="snapshot.sheet.property"
+          @close="closeSheet"
+          @submit="submitPropertyForm"
         />
         <PdfPreview
           v-if="snapshot.pdfPreview"
           :pdf-preview="snapshot.pdfPreview"
+          @close="closePdfPreview"
+          @download="downloadPdfPreview"
         />
         <ToastMessage :message="snapshot.toast" />
       </template>

@@ -22,143 +22,137 @@ import {
   getSummaryScopedRecords
 } from "../features/reports/reportExports.js";
 
-export async function handleLegacyAction(event, context) {
-  const action = event.currentTarget.dataset.action;
-  const id = event.currentTarget.dataset.id;
-  const {
-    clearVisibleData,
-    cycleProperty,
-    downloadCurrentPdfPreview,
-    getFilteredRecords,
-    getOwnerId,
-    openDetailedPdfPreview,
-    openSummaryPdfPreview,
-    refreshAll,
-    refreshRecords,
-    render,
-    runCloudSync,
-    state,
-    toast
-  } = context;
+export function closeSheet({ render, state }) {
+  state.sheet = null;
+  render();
+}
 
-  if (action === "close-sheet") {
-    state.sheet = null;
-    render();
+export function closePdfPreview({ render, state }) {
+  state.pdfPreview = null;
+  render();
+}
+
+export async function logout({ clearVisibleData }) {
+  await signOutUser();
+  await clearVisibleData();
+}
+
+export async function cycleActiveProperty({ cycleProperty }) {
+  await cycleProperty();
+}
+
+export function createProperty({ render, state }) {
+  state.sheet = { type: "property", property: null, error: "" };
+  render();
+}
+
+export function editProperty({ render, state }, id) {
+  const property = state.properties.find((item) => item.id === id);
+  state.sheet = { type: "property", property, error: "" };
+  render();
+}
+
+export async function deleteProperty(context, id) {
+  const { getOwnerId, refreshAll, runCloudSync, state, toast } = context;
+  const property = state.properties.find((item) => item.id === id);
+
+  if (!confirm(`Excluir a propriedade "${property?.name}" e suas pesagens?`)) return;
+
+  await clearWeightHistory(id, getOwnerId());
+  await removeProperty(id, getOwnerId());
+  const synced = await runCloudSync((ownerId) => syncPropertyDeletion(ownerId, id));
+  if (!synced) await queuePendingCloudOperation(getOwnerId(), { type: "propertyDeletion", propertyId: id });
+  toast("Propriedade excluída.");
+  await refreshAll();
+}
+
+export async function selectProperty({ getOwnerId, refreshAll, runCloudSync, state, toast }, id) {
+  await setActivePropertyId(id, getOwnerId());
+  await runCloudSync((ownerId) => syncActiveProperty(ownerId, id));
+  state.route = "dashboard";
+  toast("Propriedade ativa alterada.");
+  await refreshAll();
+}
+
+export function openWeightSheet({ render, state, toast }) {
+  if (!state.activePropertyId) {
+    toast("Crie uma propriedade antes de registrar pesagens.");
     return;
   }
 
-  if (action === "close-pdf-preview") {
-    state.pdfPreview = null;
-    render();
-    return;
+  state.sheet = { type: "weight", record: null, error: "" };
+  render();
+}
+
+export function editRecord({ render, state }, id) {
+  const record = state.records.find((item) => item.id === id);
+  state.sheet = { type: "weight", record, error: "" };
+  render();
+}
+
+export async function deleteRecord({ getOwnerId, refreshRecords, render, runCloudSync, toast }, id) {
+  if (!confirm("Excluir esta pesagem?")) return;
+
+  await removeWeightRecord(id);
+  const synced = await runCloudSync((ownerId) => syncWeightRecordDeletion(ownerId, id));
+  if (!synced) await queuePendingCloudOperation(getOwnerId(), { type: "weightRecordDeletion", recordId: id });
+  toast("Pesagem excluída.");
+  await refreshRecords();
+  render();
+}
+
+export async function clearHistory({ getOwnerId, refreshRecords, render, runCloudSync, state, toast }) {
+  if (!state.records.length || !confirm("Limpar todo o histórico desta propriedade?")) return;
+
+  await clearWeightHistory(state.activePropertyId, getOwnerId());
+  const synced = await runCloudSync((ownerId) => syncPropertyHistoryClear(ownerId, state.activePropertyId));
+  if (!synced) {
+    await queuePendingCloudOperation(getOwnerId(), {
+      type: "propertyHistoryClear",
+      propertyId: state.activePropertyId
+    });
   }
+  toast("Histórico limpo.");
+  await refreshRecords();
+  render();
+}
 
-  event.stopPropagation();
+export async function deleteFilteredRecords(context) {
+  const { getFilteredRecords, getOwnerId, refreshRecords, render, runCloudSync, toast } = context;
+  const filtered = getFilteredRecords();
 
-  if (action === "logout") {
-    await signOutUser();
-    await clearVisibleData();
-    return;
+  if (!filtered.length || !confirm("Excluir todos os registros filtrados?")) return;
+
+  const ids = filtered.map((record) => record.id);
+  await deleteWeightRecords(ids);
+  const synced = await runCloudSync((ownerId) => syncWeightRecordsDeletion(ownerId, ids));
+  if (!synced) {
+    await queuePendingCloudOperation(getOwnerId(), {
+      type: "weightRecordsDeletion",
+      recordIds: ids
+    });
   }
+  toast("Registros filtrados excluídos.");
+  await refreshRecords();
+  render();
+}
 
-  if (action === "cycle-property") {
-    await cycleProperty();
-  }
+export function exportDetailedCsvAction({ getFilteredRecords }) {
+  exportDetailedCsv(getFilteredRecords());
+}
 
-  if (action === "create-property") {
-    state.sheet = { type: "property", property: null, error: "" };
-    render();
-  }
+export function exportSummaryCsvAction({ getFilteredRecords, state }) {
+  exportSummaryCsv(getSummaryScopedRecords(getFilteredRecords(), state.summaryAnimal));
+}
 
-  if (action === "edit-property") {
-    const property = state.properties.find((item) => item.id === id);
-    state.sheet = { type: "property", property, error: "" };
-    render();
-  }
+export function openDetailedPdfPreview({ openDetailedPdfPreview: openPreview }) {
+  openPreview();
+}
 
-  if (action === "delete-property") {
-    const property = state.properties.find((item) => item.id === id);
-    if (confirm(`Excluir a propriedade "${property?.name}" e suas pesagens?`)) {
-      await clearWeightHistory(id, getOwnerId());
-      await removeProperty(id, getOwnerId());
-      const synced = await runCloudSync((ownerId) => syncPropertyDeletion(ownerId, id));
-      if (!synced) await queuePendingCloudOperation(getOwnerId(), { type: "propertyDeletion", propertyId: id });
-      toast("Propriedade excluída.");
-      await refreshAll();
-    }
-  }
+export function openSummaryPdfPreview({ openSummaryPdfPreview: openPreview }) {
+  openPreview();
+}
 
-  if (action === "select-property") {
-    await setActivePropertyId(id, getOwnerId());
-    await runCloudSync((ownerId) => syncActiveProperty(ownerId, id));
-    state.route = "dashboard";
-    toast("Propriedade ativa alterada.");
-    await refreshAll();
-  }
-
-  if (action === "open-weight-sheet") {
-    if (!state.activePropertyId) {
-      toast("Crie uma propriedade antes de registrar pesagens.");
-      return;
-    }
-    state.sheet = { type: "weight", record: null, error: "" };
-    render();
-  }
-
-  if (action === "edit-record") {
-    const record = state.records.find((item) => item.id === id);
-    state.sheet = { type: "weight", record, error: "" };
-    render();
-  }
-
-  if (action === "delete-record") {
-    if (confirm("Excluir esta pesagem?")) {
-      await removeWeightRecord(id);
-      const synced = await runCloudSync((ownerId) => syncWeightRecordDeletion(ownerId, id));
-      if (!synced) await queuePendingCloudOperation(getOwnerId(), { type: "weightRecordDeletion", recordId: id });
-      toast("Pesagem excluída.");
-      await refreshRecords();
-      render();
-    }
-  }
-
-  if (action === "clear-history") {
-    if (state.records.length && confirm("Limpar todo o histórico desta propriedade?")) {
-      await clearWeightHistory(state.activePropertyId, getOwnerId());
-      const synced = await runCloudSync((ownerId) => syncPropertyHistoryClear(ownerId, state.activePropertyId));
-      if (!synced) {
-        await queuePendingCloudOperation(getOwnerId(), {
-          type: "propertyHistoryClear",
-          propertyId: state.activePropertyId
-        });
-      }
-      toast("Histórico limpo.");
-      await refreshRecords();
-      render();
-    }
-  }
-
-  if (action === "delete-filtered") {
-    const filtered = getFilteredRecords();
-    if (filtered.length && confirm("Excluir todos os registros filtrados?")) {
-      const ids = filtered.map((record) => record.id);
-      await deleteWeightRecords(ids);
-      const synced = await runCloudSync((ownerId) => syncWeightRecordsDeletion(ownerId, ids));
-      if (!synced) {
-        await queuePendingCloudOperation(getOwnerId(), {
-          type: "weightRecordsDeletion",
-          recordIds: ids
-        });
-      }
-      toast("Registros filtrados excluídos.");
-      await refreshRecords();
-      render();
-    }
-  }
-
-  if (action === "export-detailed-csv") exportDetailedCsv(getFilteredRecords());
-  if (action === "export-summary-csv") exportSummaryCsv(getSummaryScopedRecords(getFilteredRecords(), state.summaryAnimal));
-  if (action === "export-detailed-pdf") openDetailedPdfPreview();
-  if (action === "export-summary-pdf") openSummaryPdfPreview();
-  if (action === "download-pdf-preview") downloadCurrentPdfPreview();
+export function downloadPdfPreview({ downloadCurrentPdfPreview }) {
+  downloadCurrentPdfPreview();
 }
