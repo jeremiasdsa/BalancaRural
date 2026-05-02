@@ -14,6 +14,7 @@ import {
 import { submitAuthForm } from "../features/auth/authForm.js";
 import { savePropertyForm } from "../features/properties/propertyForm.js";
 import { saveWeightRecordForm } from "../features/weight-records/weightRecordForm.js";
+import { aggregateByAnimal, calculateSummary } from "../features/weight-records/weightStats.js";
 import { handleLegacyAction } from "./actionHandlers.js";
 import { runCloudSyncOperation } from "./cloudSync.js";
 import { loadAppData, loadWeightRecords } from "./dataLoaders.js";
@@ -29,7 +30,6 @@ import { renderAppChrome } from "../components/layout/appChrome.js";
 import { renderPdfPreview } from "../components/modals/pdfPreview.js";
 import { registerPwa } from "../pwa/registerPwa.js";
 import { renderAuthScreen } from "../screens/auth/authScreen.js";
-import { escapeHtml } from "../utils/html.js";
 import { filterWeightRecords } from "../features/weight-records/recordFilters.js";
 
 let app = null;
@@ -110,27 +110,36 @@ function render() {
   }
 
   const activeProperty = getActiveProperty();
+  const filteredRecords = getFilteredRecords();
+  const summaryRecords = getSummaryScopedRecords(filteredRecords, state.summaryAnimal);
   const routeContent = renderRoute({
     activeProperty,
-    filteredRecords: getFilteredRecords(),
+    filteredRecords,
     state
   });
-  const overlayContent = `
-    ${state.sheet ? renderSheet() : ""}
-    ${state.pdfPreview ? renderPdfPreview(state.pdfPreview) : ""}
-    ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
-  `;
-
   if (shellRender) {
     shellRender({
       isSignedIn: true,
       activePropertyName: activeProperty?.name ?? "Sem propriedade",
       cloudEnabled: state.cloud.enabled,
       cloudMessage: state.cloud.message,
+      activePropertyId: state.activePropertyId,
+      dashboardRecords: state.records,
+      detailedReportFilters: state.filters,
+      detailedReportRecords: filteredRecords,
+      detailedReportSummary: calculateSummary(filteredRecords),
       fabContent: icons.target,
-      overlayContent,
+      pdfPreview: state.pdfPreview,
+      properties: state.properties,
       route: state.route,
-      routeContent
+      routeContent,
+      sheet: state.sheet,
+      summaryReportAggregates: aggregateByAnimal(summaryRecords),
+      summaryReportAnimals: [...new Set(state.records.map((record) => record.animalId))].sort(),
+      summaryReportFilters: state.filters,
+      summaryReportSelectedAnimal: state.summaryAnimal,
+      summaryReportSummary: calculateSummary(summaryRecords),
+      toast: state.toast
     });
     return;
   }
