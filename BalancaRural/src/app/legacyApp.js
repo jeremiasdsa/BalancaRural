@@ -43,8 +43,12 @@ import {
   signOutUser
 } from "../firebase/auth.js";
 import { clearStore, STORES } from "../data/db/indexedDb.js";
-import { icons } from "../components/icons/icons.js";
+import { renderPropertySheet } from "../components/forms/propertySheet.js";
+import { renderWeightSheet } from "../components/forms/weightSheet.js";
+import { renderAppChrome } from "../components/layout/appChrome.js";
+import { renderPdfPreview } from "../components/modals/pdfPreview.js";
 import { registerPwa } from "../pwa/registerPwa.js";
+import { renderAuthScreen } from "../screens/auth/authScreen.js";
 import { renderDashboardScreen } from "../screens/dashboard/dashboardScreen.js";
 import { renderPropertiesScreen } from "../screens/properties/propertiesScreen.js";
 import { renderDetailedReportScreen } from "../screens/reports/detailed/detailedReportScreen.js";
@@ -218,108 +222,23 @@ async function refreshRecords() {
 
 function render() {
   if (state.auth.status !== "signed-in") {
-    app.innerHTML = renderAuthScreen();
+    app.innerHTML = renderAuthScreen(state.auth);
     bindAuthEvents();
     return;
   }
 
   const activeProperty = getActiveProperty();
-  app.innerHTML = `
-    <header class="topbar">
-      <div class="logo" aria-hidden="true">BR</div>
-      <button class="property-switcher" data-action="cycle-property" type="button">
-        <span class="property-title">${escapeHtml(activeProperty?.name ?? "Sem propriedade")}</span>
-        <span aria-hidden="true">⌄</span>
-      </button>
-      <button class="topbar-menu" type="button" data-action="logout">Sair</button>
-    </header>
-
-    <main class="app-shell">
-      ${renderSyncStatus()}
-      ${renderRoute()}
-    </main>
-
-    <button class="fab" type="button" data-action="open-weight-sheet" aria-label="Adicionar pesagem">${icons.target}</button>
-
-    <nav class="bottom-nav" aria-label="Navegação principal">
-      <button class="nav-btn ${state.route === "properties" ? "active" : ""}" type="button" data-route="properties">Propriedades</button>
-      <span></span>
-      <button class="nav-btn ${state.route.startsWith("reports") ? "active" : ""}" type="button" data-route="reports-home">Relatórios</button>
-    </nav>
-
-    ${state.sheet ? renderSheet() : ""}
-    ${state.pdfPreview ? renderPdfPreview() : ""}
-    ${state.toast ? `<div class="toast">${escapeHtml(state.toast)}</div>` : ""}
-  `;
+  app.innerHTML = renderAppChrome({
+    activeProperty,
+    cloud: state.cloud,
+    pdfPreviewContent: state.pdfPreview ? renderPdfPreview(state.pdfPreview) : "",
+    route: state.route,
+    routeContent: renderRoute(),
+    sheetContent: state.sheet ? renderSheet() : "",
+    toast: state.toast
+  });
 
   bindEvents();
-}
-
-function renderAuthScreen() {
-  const isLoading = state.auth.status === "loading";
-  const mode = state.auth.mode;
-  const titles = {
-    login: "Entrar",
-    signup: "Criar conta",
-    reset: "Recuperar senha"
-  };
-  const buttonLabels = {
-    login: "Entrar",
-    signup: "Criar conta",
-    reset: "Enviar email"
-  };
-
-  return `
-    <main class="auth-shell">
-      <section class="auth-panel">
-        <div class="auth-logo" aria-hidden="true">BR</div>
-        <!--<h1>Balança Rural</h1>-->
-        <!--<p>${isLoading ? "Verificando sessão salva neste dispositivo." : "Acesse sua conta para isolar propriedades e pesagens."}</p>-->
-        ${
-          isLoading
-            ? `<div class="sync-status"><span></span>Carregando autenticação...</div>`
-            : `
-              <form data-form="auth" class="auth-form">
-                <!--<h2>${titles[mode]}</h2>-->
-                <div class="field">
-                  <label for="authEmail">Email</label>
-                  <input id="authEmail" name="email" type="email" autocomplete="email" placeholder="seu@email.com" />
-                </div>
-                ${
-                  mode !== "reset"
-                    ? `<div class="field">
-                        <label for="authPassword">Senha</label>
-                        <input id="authPassword" name="password" type="password" autocomplete="${mode === "signup" ? "new-password" : "current-password"}" placeholder="Mínimo 6 caracteres" />
-                      </div>`
-                    : ""
-                }
-                ${state.auth.error ? `<div class="auth-error">${escapeHtml(state.auth.error)}</div>` : ""}
-                ${state.auth.message ? `<div class="auth-message">${escapeHtml(state.auth.message)}</div>` : ""}
-                <button class="btn green auth-submit" type="submit" ${state.auth.loading ? "disabled" : ""}>
-                  ${state.auth.loading ? "Aguarde..." : buttonLabels[mode]}
-                </button>
-              </form>
-              <div class="auth-actions">
-                ${mode !== "login" ? `<button type="button" data-auth-mode="login">Entrar</button>` : ""}
-                ${mode !== "signup" ? `<button type="button" data-auth-mode="signup">Criar conta</button>` : ""}
-                ${mode !== "reset" ? `<button type="button" data-auth-mode="reset">Esqueci a senha</button>` : ""}
-              </div>
-              <p class="auth-note">Login, criação de conta e recuperação de senha precisam de internet. Depois de entrar neste dispositivo, o uso em campo continua offline.</p>
-            `
-        }
-      </section>
-    </main>
-  `;
-}
-
-function renderSyncStatus() {
-  const modifier = state.cloud.enabled ? "online" : "offline";
-  return `
-    <div class="sync-status ${modifier}">
-      <span></span>
-      ${escapeHtml(state.cloud.message)}
-    </div>
-  `;
 }
 
 function renderRoute() {
@@ -366,108 +285,20 @@ function renderSummaryReport() {
 }
 
 function renderSheet() {
-  if (state.sheet.type === "weight") return renderWeightSheet();
-  if (state.sheet.type === "property") return renderPropertySheet();
+  if (state.sheet.type === "weight") {
+    return renderWeightSheet({
+      activeProperty: getActiveProperty(),
+      error: state.sheet.error,
+      record: state.sheet.record
+    });
+  }
+  if (state.sheet.type === "property") {
+    return renderPropertySheet({
+      error: state.sheet.error,
+      property: state.sheet.property
+    });
+  }
   return "";
-}
-
-function renderPdfPreview() {
-  const report = state.pdfPreview.report;
-
-  return `
-    <div class="preview-backdrop">
-      <section class="pdf-preview" role="dialog" aria-modal="true" aria-labelledby="pdf-preview-title">
-        <header class="preview-header">
-          <div>
-            <h2 id="pdf-preview-title">${escapeHtml(report.title)}</h2>
-            <p>${escapeHtml(report.subtitle || "Relatório")}</p>
-          </div>
-          <button class="btn ghost small" type="button" data-action="close-pdf-preview">Fechar</button>
-        </header>
-
-        <div class="preview-actions">
-          <button class="btn green" type="button" data-action="download-pdf-preview">${icons.check} Baixar PDF</button>
-        </div>
-
-        <div class="preview-page">
-          <h3>${escapeHtml(report.title)}</h3>
-          <p>${escapeHtml(report.subtitle || "")}</p>
-          <div class="preview-summary">
-            ${report.summaryItems.map(([label, value]) => `
-              <div>
-                <span>${escapeHtml(label)}</span>
-                <strong>${escapeHtml(value)}</strong>
-              </div>
-            `).join("")}
-          </div>
-          <div class="preview-table-wrap">
-            <table class="preview-table">
-              <thead>
-                <tr>${report.columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("")}</tr>
-              </thead>
-              <tbody>
-                ${
-                  report.rows.length
-                    ? report.rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")
-                    : `<tr><td colspan="${report.columns.length}">Nenhum registro encontrado.</td></tr>`
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-    </div>
-  `;
-}
-
-function renderWeightSheet() {
-  const record = state.sheet.record;
-  const isEditing = Boolean(record);
-  const activeProperty = getActiveProperty();
-
-  return `
-    <div class="sheet-backdrop" data-action="close-sheet">
-      <form class="sheet" data-form="weight">
-        <h2>${isEditing ? "Editar pesagem" : "Adicionar pesagem"}</h2>
-        <p class="sheet-context">Propriedade: <strong>${escapeHtml(activeProperty?.name ?? "Sem propriedade ativa")}</strong></p>
-        <div class="field">
-          <label for="animalId">Código do Animal</label>
-          <input id="animalId" name="animalId" value="${escapeHtml(record?.animalId ?? "")}" placeholder="Digite o código do animal" inputmode="numeric" autocomplete="off" />
-        </div>
-        <div class="field">
-          <label for="weight">Peso</label>
-          <input id="weight" name="weight" value="${record?.weight ?? ""}" type="number" min="1" step="0.1" inputmode="decimal" placeholder="Peso em kg" />
-        </div>
-        ${state.sheet.error ? `<div class="field-error">${escapeHtml(state.sheet.error)}</div>` : ""}
-        <div class="row-actions" style="margin-top: 16px;">
-          <button class="btn ghost" type="button" data-action="close-sheet">Cancelar</button>
-          <button class="btn green" type="submit">${icons.check} Confirmar</button>
-        </div>
-      </form>
-    </div>
-  `;
-}
-
-function renderPropertySheet() {
-  const property = state.sheet.property;
-  const isEditing = Boolean(property);
-
-  return `
-    <div class="sheet-backdrop" data-action="close-sheet">
-      <form class="sheet" data-form="property">
-        <h2>${isEditing ? "Editar propriedade" : "Nova propriedade"}</h2>
-        <div class="field">
-          <label for="propertyName">Nome da propriedade</label>
-          <input id="propertyName" name="name" value="${escapeHtml(property?.name ?? "")}" placeholder="Ex.: Fazenda Santa Clara" autocomplete="off" />
-        </div>
-        ${state.sheet.error ? `<div class="field-error">${escapeHtml(state.sheet.error)}</div>` : ""}
-        <div class="row-actions" style="margin-top: 16px;">
-          <button class="btn ghost" type="button" data-action="close-sheet">Cancelar</button>
-          <button class="btn green" type="submit">${icons.check} Confirmar</button>
-        </div>
-      </form>
-    </div>
-  `;
 }
 
 function bindEvents() {
