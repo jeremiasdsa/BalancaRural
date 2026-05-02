@@ -7,6 +7,7 @@ import {
   setActivePropertyId,
   updateProperty
 } from "../data/repositories/propertiesRepository.js";
+import { bindAppEvents, bindAuthEvents } from "./eventBindings.js";
 import {
   clearWeightHistory,
   createWeightRecord,
@@ -16,7 +17,6 @@ import {
   removeWeightRecord,
   updateWeightRecord
 } from "../data/repositories/weightRecordsRepository.js";
-import { downloadCsv, downloadPdfReport } from "../services/export/exporters.js";
 import {
   initCloudSync,
   queuePendingCloudOperation,
@@ -30,9 +30,16 @@ import {
 } from "../firebase/firestoreSync.js";
 import {
   aggregateByAnimal,
-  calculateSummary,
-  getSummaryItems
+  calculateSummary
 } from "../features/weight-records/weightStats.js";
+import {
+  createDetailedPdfPreview,
+  createSummaryPdfPreview,
+  downloadPdfPreview,
+  exportDetailedCsv,
+  exportSummaryCsv,
+  getSummaryScopedRecords
+} from "../features/reports/reportExports.js";
 import {
   createAccountWithEmail,
   getAuthErrorMessage,
@@ -54,7 +61,6 @@ import { renderPropertiesScreen } from "../screens/properties/propertiesScreen.j
 import { renderDetailedReportScreen } from "../screens/reports/detailed/detailedReportScreen.js";
 import { renderReportsHomeScreen } from "../screens/reports/home/reportsHomeScreen.js";
 import { renderSummaryReportScreen } from "../screens/reports/summary/summaryReportScreen.js";
-import { formatDateTime, formatNumber } from "../utils/format.js";
 import { escapeHtml } from "../utils/html.js";
 
 let app = null;
@@ -223,7 +229,10 @@ async function refreshRecords() {
 function render() {
   if (state.auth.status !== "signed-in") {
     app.innerHTML = renderAuthScreen(state.auth);
-    bindAuthEvents();
+    bindAuthEvents(app, {
+      onAuthModeChange: handleAuthModeChange,
+      onAuthSubmit: handleAuthSubmit
+    });
     return;
   }
 
@@ -238,7 +247,14 @@ function render() {
     toast: state.toast
   });
 
-  bindEvents();
+  bindAppEvents(app, {
+    onAction: handleAction,
+    onFilterChange: handleFilterChange,
+    onPropertySubmit: handlePropertySubmit,
+    onRouteChange: handleRouteChange,
+    onSummaryAnimalChange: handleSummaryAnimalChange,
+    onWeightSubmit: handleWeightSubmit
+  });
 }
 
 function renderRoute() {
@@ -271,7 +287,7 @@ function renderDetailedReport() {
 function renderSummaryReport() {
   const filtered = getFilteredRecords();
   const animals = [...new Set(state.records.map((record) => record.animalId))].sort();
-  const scoped = getSummaryScopedRecords(filtered);
+  const scoped = getSummaryScopedRecords(filtered, state.summaryAnimal);
   const summary = calculateSummary(scoped);
   const aggregates = aggregateByAnimal(scoped);
   return renderSummaryReportScreen({
@@ -301,60 +317,11 @@ function renderSheet() {
   return "";
 }
 
-function bindEvents() {
-  app.querySelectorAll("[data-route]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.route = button.dataset.route;
-      render();
-    });
-  });
-
-  app.querySelectorAll("[data-action]").forEach((element) => {
-    element.addEventListener("click", handleAction);
-  });
-
-  app.querySelectorAll("[data-filter]").forEach((input) => {
-    input.addEventListener("input", () => {
-      state.filters[input.dataset.filter] = input.value;
-      render();
-    });
-  });
-
-  const summarySelect = app.querySelector("[data-action='summary-animal']");
-  if (summarySelect) {
-    summarySelect.addEventListener("change", () => {
-      state.summaryAnimal = summarySelect.value;
-      render();
-    });
-  }
-
-  const weightForm = app.querySelector("[data-form='weight']");
-  if (weightForm) {
-    weightForm.addEventListener("submit", handleWeightSubmit);
-    weightForm.addEventListener("click", (event) => event.stopPropagation());
-  }
-
-  const propertyForm = app.querySelector("[data-form='property']");
-  if (propertyForm) {
-    propertyForm.addEventListener("submit", handlePropertySubmit);
-    propertyForm.addEventListener("click", (event) => event.stopPropagation());
-  }
-}
-
-function bindAuthEvents() {
-  app.querySelectorAll("[data-auth-mode]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.auth.mode = button.dataset.authMode;
-      state.auth.error = "";
-      state.auth.message = "";
-      render();
-    });
-  });
-
-  const authForm = app.querySelector("[data-form='auth']");
-  if (authForm) {
-    authForm.addEventListener("submit", handleAuthSubmit);
-  }
+function handleAuthModeChange(authMode) {
+  state.auth.mode = authMode;
+  state.auth.error = "";
+  state.auth.message = "";
+  render();
 }
 
 async function handleAuthSubmit(event) {
@@ -396,6 +363,21 @@ async function handleAuthSubmit(event) {
     state.auth.error = getAuthErrorMessage(error);
     render();
   }
+}
+
+function handleRouteChange(route) {
+  state.route = route;
+  render();
+}
+
+function handleFilterChange(filter, value) {
+  state.filters[filter] = value;
+  render();
+}
+
+function handleSummaryAnimalChange(value) {
+  state.summaryAnimal = value;
+  render();
 }
 
 async function handleAction(event) {
@@ -517,8 +499,8 @@ async function handleAction(event) {
     }
   }
 
-  if (action === "export-detailed-csv") exportDetailedCsv();
-  if (action === "export-summary-csv") exportSummaryCsv();
+  if (action === "export-detailed-csv") exportDetailedCsv(getFilteredRecords());
+  if (action === "export-summary-csv") exportSummaryCsv(getSummaryScopedRecords(getFilteredRecords(), state.summaryAnimal));
   if (action === "export-detailed-pdf") openDetailedPdfPreview();
   if (action === "export-summary-pdf") openSummaryPdfPreview();
   if (action === "download-pdf-preview") downloadCurrentPdfPreview();
@@ -691,98 +673,24 @@ function getFilteredRecords() {
   });
 }
 
-function exportDetailedCsv() {
-  const rows = [
-    ["Animal", "Data e hora", "Peso kg"],
-    ...getFilteredRecords().map((record) => [record.animalId, formatDateTime(record.timestamp), record.weight])
-  ];
-  downloadCsv("relatorio-detalhado.csv", rows);
-}
-
-function exportSummaryCsv() {
-  const records = getSummaryScopedRecords(getFilteredRecords());
-  const rows = [
-    ["Animal", "Quantidade", "Ultimo peso kg", "Maior kg", "Menor kg", "Media kg"],
-    ...aggregateByAnimal(records).map((item) => [
-      item.animalId,
-      item.quantity,
-      item.lastWeight,
-      item.max,
-      item.min,
-      item.average.toFixed(1)
-    ])
-  ];
-  downloadCsv("relatorio-resumido.csv", rows);
-}
-
 function openDetailedPdfPreview() {
-  state.pdfPreview = createDetailedPdfPreview();
+  state.pdfPreview = createDetailedPdfPreview({
+    activeProperty: getActiveProperty(),
+    records: getFilteredRecords()
+  });
   render();
 }
 
 function openSummaryPdfPreview() {
-  state.pdfPreview = createSummaryPdfPreview();
+  state.pdfPreview = createSummaryPdfPreview({
+    activeProperty: getActiveProperty(),
+    records: getSummaryScopedRecords(getFilteredRecords(), state.summaryAnimal)
+  });
   render();
 }
 
 function downloadCurrentPdfPreview() {
-  if (!state.pdfPreview) return;
-  downloadPdfReport(state.pdfPreview.filename, state.pdfPreview.report);
-}
-
-function createDetailedPdfPreview() {
-  const records = getFilteredRecords();
-  const summary = calculateSummary(records);
-  return {
-    filename: "relatorio-detalhado.pdf",
-    report: {
-      title: "Relatório Detalhado",
-      subtitle: getActiveProperty()?.name ?? "",
-      summaryItems: getSummaryItems(summary),
-      columns: [
-        { label: "Animal", width: 18 },
-        { label: "Data e hora", width: 22 },
-        { label: "Peso", width: 14 }
-      ],
-      rows: records.map((record) => [
-        record.animalId,
-        formatDateTime(record.timestamp),
-        `${formatNumber(record.weight)} kg`
-      ])
-    }
-  };
-}
-
-function createSummaryPdfPreview() {
-  const records = getSummaryScopedRecords(getFilteredRecords());
-  const aggregates = aggregateByAnimal(records);
-  const summary = calculateSummary(records);
-  return {
-    filename: "relatorio-resumido.pdf",
-    report: {
-      title: "Relatório Resumido",
-      subtitle: getActiveProperty()?.name ?? "",
-      summaryItems: getSummaryItems(summary),
-      columns: [
-        { label: "Animal", width: 18 },
-        { label: "Pesagens", width: 10 },
-        { label: "Último peso", width: 14 },
-        { label: "Média", width: 14 }
-      ],
-      rows: aggregates.map((item) => [
-        item.animalId,
-        item.quantity,
-        `${formatNumber(item.lastWeight)} kg`,
-        `${formatNumber(item.average)} kg`
-      ])
-    }
-  };
-}
-
-function getSummaryScopedRecords(records) {
-  return state.summaryAnimal === "Todos"
-    ? records
-    : records.filter((record) => record.animalId === state.summaryAnimal);
+  downloadPdfPreview(state.pdfPreview);
 }
 
 function toast(message) {
