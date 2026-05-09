@@ -68,8 +68,8 @@ export function getSummaryItems(summary) {
 
 export function formatSex(sex) {
   const value = normalizeSex(sex);
-  if (value === "M") return "Macho";
-  if (value === "F") return "Fêmea";
+  if (value === "M") return "M";
+  if (value === "F") return "F";
   return "";
 }
 

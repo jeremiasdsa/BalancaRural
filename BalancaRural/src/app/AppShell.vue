@@ -40,6 +40,7 @@ import {
 } from "./appController.js";
 
 const isSignedIn = ref(false);
+const syncAuthOpen = ref(false);
 const authState = reactive({
   status: "loading",
   mode: "login",
@@ -65,6 +66,12 @@ function applySnapshot(nextSnapshot) {
 
   isSignedIn.value = true;
   snapshot.value = nextSnapshot;
+  if (nextSnapshot.cloudConnected) {
+    syncAuthOpen.value = false;
+    authState.loading = false;
+    authState.error = "";
+    authState.message = "";
+  }
 }
 
 function handleAuthModeChange(mode) {
@@ -92,6 +99,22 @@ async function handleAuthSubmit(event) {
   authState.message = result.message ?? "";
 }
 
+function openCloudSync() {
+  authState.status = "signed-out";
+  authState.mode = "login";
+  authState.loading = false;
+  authState.error = "";
+  authState.message = "";
+  syncAuthOpen.value = true;
+}
+
+function closeCloudSync() {
+  if (authState.loading) return;
+  syncAuthOpen.value = false;
+  authState.error = "";
+  authState.message = "";
+}
+
 onMounted(() => {
   mountAppController({ onShellRender: applySnapshot });
 });
@@ -102,12 +125,14 @@ onMounted(() => {
     <AppChrome
       :active-property-name="snapshot.activePropertyName"
       :cloud-enabled="snapshot.cloudEnabled"
+      :cloud-connected="snapshot.cloudConnected"
       :cloud-message="snapshot.cloudMessage"
       :route="snapshot.route"
       @cycle-property="cycleActiveProperty"
       @logout="logout"
       @navigate="navigateRoute"
       @open-weight-sheet="openWeightSheet"
+      @sync-cloud="openCloudSync"
     >
       <DashboardScreen
         v-if="snapshot.route === 'dashboard'"
@@ -180,6 +205,15 @@ onMounted(() => {
           @download="downloadPdfPreview"
         />
         <ToastMessage :message="snapshot.toast" />
+        <div v-if="syncAuthOpen" class="auth-modal-backdrop" @click.self="closeCloudSync">
+          <AuthScreen
+            :auth="authState"
+            variant="modal"
+            @submit="handleAuthSubmit"
+            @mode-change="handleAuthModeChange"
+            @close="closeCloudSync"
+          />
+        </div>
       </template>
     </AppChrome>
   </div>

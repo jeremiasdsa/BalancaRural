@@ -17,11 +17,11 @@ const COLLECTIONS = {
 
 let firestoreSdk = null;
 
-export async function initCloudSync(ownerId) {
+export async function initCloudSync(ownerId, options = {}) {
   if (!ownerId) {
     return {
       enabled: false,
-      message: "Aguardando login."
+      message: "Dados locais neste aparelho."
     };
   }
 
@@ -33,7 +33,11 @@ export async function initCloudSync(ownerId) {
   }
 
   try {
-    await pullFirebaseToLocal(ownerId);
+    if (options.localOwnerId && options.localOwnerId !== ownerId) {
+      await mergeLocalAndCloudData(ownerId, options.localOwnerId);
+    } else {
+      await pullFirebaseToLocal(ownerId);
+    }
     await ensureValidActiveProperty(ownerId);
     await flushPendingCloudOperations(ownerId);
     await syncAllLocalData(ownerId);
@@ -48,6 +52,19 @@ export async function initCloudSync(ownerId) {
       message: "Firebase indisponível."
     };
   }
+}
+
+export async function mirrorOwnerData(sourceOwnerId, targetOwnerId) {
+  if (!sourceOwnerId || !targetOwnerId || sourceOwnerId === targetOwnerId) return;
+
+  const [sourceData, targetData] = await Promise.all([
+    readLocalOwnerData(sourceOwnerId),
+    readLocalOwnerData(targetOwnerId)
+  ]);
+  const merged = mergeOwnerData(targetData, sourceData, targetOwnerId);
+
+  await writeLocalOwnerData(targetOwnerId, merged);
+  await ensureValidActiveProperty(targetOwnerId);
 }
 
 export async function syncAllLocalData(ownerId) {
@@ -151,8 +168,38 @@ export async function syncWeightRecordsDeletion(ownerId, recordIds) {
 }
 
 async function pullFirebaseToLocal(ownerId) {
+  const cloudData = await readCloudOwnerData(ownerId);
+  if (!cloudData) return false;
+
+  await writeLocalOwnerData(ownerId, cloudData);
+  return true;
+}
+
+async function mergeLocalAndCloudData(ownerId, localOwnerId) {
+  const [localData, currentOwnerData, cloudData, localPending] = await Promise.all([
+    readLocalOwnerData(localOwnerId),
+    readLocalOwnerData(ownerId),
+    readCloudOwnerData(ownerId),
+    readPendingCloudOperations(localOwnerId)
+  ]);
+  const mergedLocalData = mergeOwnerData(currentOwnerData, localData, ownerId);
+  const merged = applyPendingOperations(
+    mergeOwnerData(mergedLocalData, cloudData ?? createOwnerData(), ownerId),
+    localPending
+  );
+
+  await writeLocalOwnerData(ownerId, merged);
+  await writeOne(STORES.appState, {
+    key: getPendingKey(ownerId),
+    ownerId,
+    value: localPending
+  });
+  return true;
+}
+
+async function readCloudOwnerData(ownerId) {
   const db = await getFirebaseDb();
-  if (!db) return false;
+  if (!db) return null;
   const { collection, getDocs } = await getFirestoreSdk();
 
   const [propertiesSnapshot, recordsSnapshot, appStateSnapshot] = await Promise.all([
@@ -161,8 +208,10 @@ async function pullFirebaseToLocal(ownerId) {
     getDocs(userCollection(db, ownerId, COLLECTIONS.appState, collection))
   ]);
 
+  const data = createOwnerData();
+
   for (const propertyDoc of propertiesSnapshot.docs) {
-    await writeOne(STORES.properties, {
+    data.properties.push({
       ...propertyDoc.data(),
       ownerId,
       id: propertyDoc.data().id || propertyDoc.id
@@ -170,7 +219,7 @@ async function pullFirebaseToLocal(ownerId) {
   }
 
   for (const recordDoc of recordsSnapshot.docs) {
-    await writeOne(STORES.weightRecords, {
+    data.records.push({
       ...recordDoc.data(),
       ownerId,
       id: recordDoc.data().id || recordDoc.id
@@ -179,10 +228,10 @@ async function pullFirebaseToLocal(ownerId) {
 
   const activePropertyDoc = appStateSnapshot.docs.find((item) => item.id === "activePropertyId");
   if (activePropertyDoc?.data()?.value) {
-    await setActivePropertyId(activePropertyDoc.data().value, ownerId);
+    data.activePropertyId = activePropertyDoc.data().value;
   }
 
-  return true;
+  return data;
 }
 
 export async function syncActiveProperty(ownerId, propertyId) {
@@ -230,8 +279,7 @@ export async function queuePendingCloudOperation(ownerId, operation) {
 }
 
 async function flushPendingCloudOperations(ownerId) {
-  const key = getPendingKey(ownerId);
-  const pending = normalizePendingQueue((await readOne(STORES.appState, key))?.value);
+  const pending = await readPendingCloudOperations(ownerId);
 
   for (const propertyId of pending.propertyHistoryClears) {
     await syncPropertyHistoryClear(ownerId, propertyId);
@@ -246,10 +294,14 @@ async function flushPendingCloudOperations(ownerId) {
   }
 
   await writeOne(STORES.appState, {
-    key,
+    key: getPendingKey(ownerId),
     ownerId,
     value: createPendingQueue()
   });
+}
+
+async function readPendingCloudOperations(ownerId) {
+  return normalizePendingQueue((await readOne(STORES.appState, getPendingKey(ownerId)))?.value);
 }
 
 function getPendingKey(ownerId) {
@@ -272,6 +324,20 @@ function normalizePendingQueue(queue = {}) {
   };
 }
 
+function applyPendingOperations(data, pending) {
+  const deletedProperties = new Set(pending.propertyDeletions);
+  const clearedHistoryProperties = new Set([...pending.propertyHistoryClears, ...pending.propertyDeletions]);
+  const deletedRecords = new Set(pending.weightRecordDeletions);
+
+  return {
+    properties: data.properties.filter((property) => !deletedProperties.has(property.id)),
+    records: data.records.filter((record) => {
+      return !deletedRecords.has(record.id) && !clearedHistoryProperties.has(record.propertyId);
+    }),
+    activePropertyId: deletedProperties.has(data.activePropertyId) ? null : data.activePropertyId
+  };
+}
+
 function userCollection(db, ownerId, collectionName, collection) {
   return collection(db, COLLECTIONS.users, ownerId, collectionName);
 }
@@ -286,4 +352,82 @@ async function getFirestoreSdk() {
   }
 
   return firestoreSdk;
+}
+
+async function readLocalOwnerData(ownerId) {
+  const [properties, records, activePropertyId] = await Promise.all([
+    listProperties(ownerId),
+    listAllWeightRecords(ownerId),
+    getActivePropertyId(ownerId)
+  ]);
+
+  return {
+    properties,
+    records,
+    activePropertyId
+  };
+}
+
+async function writeLocalOwnerData(ownerId, data) {
+  for (const property of data.properties) {
+    await writeOne(STORES.properties, {
+      ...property,
+      ownerId
+    });
+  }
+
+  for (const record of data.records) {
+    await writeOne(STORES.weightRecords, {
+      ...record,
+      ownerId
+    });
+  }
+
+  if (data.activePropertyId) {
+    await setActivePropertyId(data.activePropertyId, ownerId);
+  }
+}
+
+function createOwnerData() {
+  return {
+    properties: [],
+    records: [],
+    activePropertyId: null
+  };
+}
+
+function mergeOwnerData(base, incoming, ownerId) {
+  return {
+    properties: mergeById(base.properties, incoming.properties, ownerId),
+    records: mergeById(base.records, incoming.records, ownerId),
+    activePropertyId: incoming.activePropertyId || base.activePropertyId || null
+  };
+}
+
+function mergeById(baseItems, incomingItems, ownerId) {
+  const byId = new Map();
+
+  [...baseItems, ...incomingItems].forEach((item) => {
+    if (!item?.id) return;
+
+    const normalized = {
+      ...item,
+      ownerId
+    };
+    const current = byId.get(item.id);
+    byId.set(item.id, chooseLatest(current, normalized));
+  });
+
+  return [...byId.values()];
+}
+
+function chooseLatest(current, next) {
+  if (!current) return next;
+  return getComparableDate(next) >= getComparableDate(current) ? next : current;
+}
+
+function getComparableDate(item) {
+  const value = item.updatedAt || item.timestamp || item.createdAt || "";
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : 0;
 }

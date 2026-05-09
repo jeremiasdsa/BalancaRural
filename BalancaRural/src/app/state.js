@@ -1,3 +1,5 @@
+import { createLocalUser } from "./localIdentity.js";
+
 export function createInitialState() {
   return {
     route: "dashboard",
@@ -10,16 +12,16 @@ export function createInitialState() {
     pdfPreview: null,
     toast: "",
     auth: {
-      status: "loading",
+      status: "signed-in",
       mode: "login",
-      user: null,
+      user: createLocalUser(),
       error: "",
       message: "",
       loading: false
     },
     cloud: {
       enabled: false,
-      message: "Aguardando login."
+      message: "Dados locais neste aparelho."
     }
   };
 }

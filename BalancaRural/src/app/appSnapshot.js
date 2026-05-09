@@ -2,6 +2,7 @@ import { icons } from "../components/icons/icons.js";
 import { getSummaryScopedRecords } from "../features/reports/reportExports.js";
 import { filterWeightRecords } from "../features/weight-records/recordFilters.js";
 import { aggregateByAnimal, calculateSummary } from "../features/weight-records/weightStats.js";
+import { isLocalUser } from "./localIdentity.js";
 
 export function createAppSnapshot(state) {
   if (state.auth.status !== "signed-in") {
@@ -18,7 +19,9 @@ export function createAppSnapshot(state) {
   return {
     isSignedIn: true,
     activePropertyName: activeProperty?.name ?? "Sem propriedade",
+    auth: { ...state.auth },
     cloudEnabled: state.cloud.enabled,
+    cloudConnected: !isLocalUser(state.auth.user),
     cloudMessage: state.cloud.message,
     activePropertyId: state.activePropertyId,
     dashboardRecords: state.records,

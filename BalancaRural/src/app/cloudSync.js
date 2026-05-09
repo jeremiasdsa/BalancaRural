@@ -1,8 +1,8 @@
 import { initCloudSync } from "../firebase/firestoreSync.js";
 
-export async function runCloudSyncWithStatus(ownerId) {
+export async function runCloudSyncWithStatus(ownerId, options = {}) {
   return Promise.race([
-    initCloudSync(ownerId),
+    initCloudSync(ownerId, options),
     new Promise((resolve) => {
       window.setTimeout(() => resolve({
         enabled: false,

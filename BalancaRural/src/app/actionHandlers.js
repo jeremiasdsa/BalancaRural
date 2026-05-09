@@ -32,9 +32,8 @@ export function closePdfPreview({ render, state }) {
   render();
 }
 
-export async function logout({ clearVisibleData }) {
+export async function logout() {
   await signOutUser();
-  await clearVisibleData();
 }
 
 export async function cycleActiveProperty({ cycleProperty }) {

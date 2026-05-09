@@ -5,6 +5,7 @@ export const icons = {
   trash: svg("M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15"),
   pencil: svg("M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"),
   check: svg("M20 6 9 17l-5-5"),
+  cloud: svg("M17 18H8a5 5 0 1 1 1.6-9.7A6 6 0 0 1 21 11a3.5 3.5 0 0 1-4 7Z"),
   clipboard: svg("M9 4h6v3H9V4ZM8 5H6v16h12V5h-2M8 11h8M8 15h8"),
   calendar: svg("M7 3v4M17 3v4M4 9h16M5 5h14v16H5V5Z"),
   chart: svg("M5 19V9M10 19V5M15 19v-7M20 19H3"),

@@ -12,6 +12,10 @@ defineProps({
     type: Boolean,
     default: false
   },
+  cloudConnected: {
+    type: Boolean,
+    default: false
+  },
   cloudMessage: {
     type: String,
     default: ""
@@ -22,14 +26,16 @@ defineProps({
   }
 });
 
-defineEmits(["cycle-property", "logout", "navigate", "open-weight-sheet"]);
+defineEmits(["cycle-property", "logout", "navigate", "open-weight-sheet", "sync-cloud"]);
 </script>
 
 <template>
   <Topbar
+    :cloud-connected="cloudConnected"
     :property-name="activePropertyName"
     @cycle-property="$emit('cycle-property')"
     @logout="$emit('logout')"
+    @sync-cloud="$emit('sync-cloud')"
   />
 
   <main class="app-shell">

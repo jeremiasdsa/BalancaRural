@@ -3,10 +3,14 @@ defineProps({
   auth: {
     type: Object,
     required: true
+  },
+  variant: {
+    type: String,
+    default: "screen"
   }
 });
 
-const emit = defineEmits(["submit", "mode-change"]);
+const emit = defineEmits(["submit", "mode-change", "close"]);
 
 const buttonLabels = {
   login: "Entrar",
@@ -16,8 +20,9 @@ const buttonLabels = {
 </script>
 
 <template>
-  <main class="auth-shell">
+  <main class="auth-shell" :class="{ 'auth-shell-modal': variant === 'modal' }">
     <section class="auth-panel">
+      <button v-if="variant === 'modal'" class="auth-close" type="button" aria-label="Fechar" @click="emit('close')">x</button>
       <div class="auth-logo" aria-hidden="true">BR</div>
       <div v-if="auth.status === 'loading'" class="sync-status">
         <span></span>
@@ -50,7 +55,7 @@ const buttonLabels = {
           <button v-if="auth.mode !== 'signup'" type="button" @click="emit('mode-change', 'signup')">Criar conta</button>
           <button v-if="auth.mode !== 'reset'" type="button" @click="emit('mode-change', 'reset')">Esqueci a senha</button>
         </div>
-        <p class="auth-note">Login, criação de conta e recuperação de senha precisam de internet. Depois de entrar neste dispositivo, o uso em campo continua offline.</p>
+        <p class="auth-note">Login, criação de conta e recuperação de senha precisam de internet. Depois de conectar, seus dados locais serão mesclados com a nuvem.</p>
         <p class="auth-note"> V.0.7</p>
       </template>
     </section>

@@ -1,5 +1,7 @@
 import { observeAuthState, resolveOnlineAuthUser } from "../firebase/auth.js";
+import { mirrorOwnerData } from "../firebase/firestoreSync.js";
 import { runCloudSyncWithStatus } from "./cloudSync.js";
+import { createLocalUser, getLocalOwnerId, isLocalUser } from "./localIdentity.js";
 
 const AUTH_RESTORE_ATTEMPTS = 5;
 const AUTH_RESTORE_RETRY_DELAY_MS = 4000;
@@ -22,7 +24,7 @@ export async function initializeSessionLifecycle({
   });
 
   const handleOnlineRequest = () => {
-    if (onlineSyncInFlight || state.auth.status !== "signed-in") return;
+    if (onlineSyncInFlight || !isCloudUser(state.auth.user)) return;
 
     onlineSyncInFlight = handleOnline({
       getOwnerId,
@@ -54,26 +56,30 @@ export async function initializeSessionLifecycle({
 
 function createAuthChangeHandler({ clearVisibleData, getOwnerId, refreshAll, render, state }) {
   return async (user) => {
-    const previousUserId = state.auth.user?.uid ?? null;
+    const previousUser = state.auth.user;
 
     if (!user) {
+      if (isCloudUser(previousUser)) {
+        await mirrorOwnerData(previousUser.uid, getLocalOwnerId());
+      }
+
       state.auth = {
         ...state.auth,
-        status: "signed-out",
-        user: null,
+        status: "signed-in",
+        user: createLocalUser(),
         loading: false
       };
       state.cloud = {
         enabled: false,
-        message: "Aguardando login."
+        message: "Dados locais neste aparelho."
       };
-      await clearVisibleData();
+      await refreshAll();
       render();
       return;
     }
 
-    if (previousUserId && previousUserId !== user.uid) {
-      await clearVisibleData();
+    if (isCloudUser(previousUser) && previousUser.uid !== user.uid) {
+      await mirrorOwnerData(previousUser.uid, getLocalOwnerId());
     }
 
     state.auth = {
@@ -90,14 +96,14 @@ function createAuthChangeHandler({ clearVisibleData, getOwnerId, refreshAll, ren
     };
     await refreshAll();
     if (navigator.onLine) {
-      state.cloud = await runCloudSyncWithStatus(getOwnerId());
+      state.cloud = await runCloudSyncWithStatus(getOwnerId(), { localOwnerId: getLocalOwnerId() });
       await refreshAll();
     }
   };
 }
 
 async function handleOnline({ getOwnerId, handleAuthChange, refreshAll, render, state }) {
-  if (state.auth.status !== "signed-in") return;
+  if (!isCloudUser(state.auth.user)) return;
   state.cloud = {
     enabled: false,
     message: state.auth.user?.isOfflineSession ? "Restaurando sessão Firebase..." : "Sincronizando Firebase..."
@@ -118,7 +124,7 @@ async function handleOnline({ getOwnerId, handleAuthChange, refreshAll, render, 
     return;
   }
 
-  state.cloud = await runCloudSyncWithStatus(getOwnerId());
+  state.cloud = await runCloudSyncWithStatus(getOwnerId(), { localOwnerId: getLocalOwnerId() });
   await refreshAll();
 }
 
@@ -148,14 +154,18 @@ function delay(ms) {
 }
 
 function shouldRetryOnlineSync(state) {
-  return navigator.onLine && state.auth.status === "signed-in" && (!state.cloud.enabled || state.auth.user?.isOfflineSession);
+  return navigator.onLine && isCloudUser(state.auth.user) && (!state.cloud.enabled || state.auth.user?.isOfflineSession);
 }
 
 function handleOffline({ render, state }) {
-  if (state.auth.status !== "signed-in") return;
+  if (!isCloudUser(state.auth.user)) return;
   state.cloud = {
     enabled: false,
     message: "Offline: alterações serão sincronizadas depois."
   };
   render();
+}
+
+function isCloudUser(user) {
+  return Boolean(user?.uid) && !isLocalUser(user);
 }
