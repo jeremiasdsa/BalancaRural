@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { icons } from "../icons/icons.js";
 import { formatDateTime, formatNumber } from "../../utils/format.js";
+import { formatAgeCategory } from "../../features/weight-records/ageCategories.js";
 import { formatSex, normalizeSex } from "../../features/weight-records/weightStats.js";
 
 const props = defineProps({
@@ -65,6 +66,7 @@ function toggleExpanded() {
       <div class="record-meta">
         <span>{{ formatDateTime(record.timestamp) }}</span>
         <span>{{ formatSex(record.sex) || "Sexo não informado" }}</span>
+        <span>{{ formatAgeCategory(record.ageCategory) || "Idade não informada" }}</span>
       </div>
       <div class="record-highlight weight">
         <span>Peso</span>
@@ -77,6 +79,10 @@ function toggleExpanded() {
         <div class="record-detail-line">
           <span v-html="icons.calendar"></span>
           <strong>{{ formatDateTime(record.timestamp) }}</strong>
+        </div>
+        <div class="record-detail-line">
+          <span v-html="icons.target"></span>
+          <strong>{{ formatAgeCategory(record.ageCategory) || "Idade não informada" }}</strong>
         </div>
         <div class="record-detail-line note-line">
           <span v-html="icons.file"></span>

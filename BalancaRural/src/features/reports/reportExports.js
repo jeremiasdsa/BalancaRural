@@ -1,5 +1,6 @@
 import { downloadCsv, downloadPdfReport } from "../../services/export/exporters.js";
 import { formatDateTime, formatNumber } from "../../utils/format.js";
+import { formatAgeCategory } from "../weight-records/ageCategories.js";
 import { aggregateByAnimal, calculateSummary, formatSex, getSummaryItems } from "../weight-records/weightStats.js";
 
 export function getSummaryScopedRecords(records, selectedAnimal) {
@@ -10,10 +11,11 @@ export function getSummaryScopedRecords(records, selectedAnimal) {
 
 export function exportDetailedCsv(records) {
   const rows = [
-    ["Animal", "Sexo", "Data e hora", "Peso kg", "Info"],
+    ["Animal", "Sexo", "Idade", "Data e hora", "Peso kg", "Info"],
     ...records.map((record) => [
       record.animalId,
       record.sex ?? "",
+      formatAgeCategory(record.ageCategory),
       formatDateTime(record.timestamp),
       record.weight,
       record.info ?? ""
@@ -24,9 +26,10 @@ export function exportDetailedCsv(records) {
 
 export function exportSummaryCsv(records) {
   const rows = [
-    ["Animal", "Quantidade", "Ultimo peso kg", "Maior kg", "Menor kg", "Media kg"],
+    ["Animal", "Idade", "Quantidade", "Ultimo peso kg", "Maior kg", "Menor kg", "Media kg"],
     ...aggregateByAnimal(records).map((item) => [
       item.animalId,
+      item.ageCategoryLabel,
       item.quantity,
       item.lastWeight,
       item.max,
@@ -53,13 +56,15 @@ export function createDetailedPdfPreview({ activeProperty, records }) {
       columns: [
         { label: "Animal", width: 12 },
         { label: "Sexo", width: 6 },
-        { label: "Data e hora", width: 18 },
+        { label: "Idade", width: 20 },
+        { label: "Data e hora", width: 16 },
         { label: "Peso", width: 10 },
-        { label: "Info", width: 22 }
+        { label: "Info", width: 18 }
       ],
       rows: records.map((record) => [
         record.animalId,
         formatSex(record.sex),
+        formatAgeCategory(record.ageCategory),
         formatDateTime(record.timestamp),
         `${formatNumber(record.weight)} kg`,
         record.info ?? ""
@@ -78,13 +83,15 @@ export function createSummaryPdfPreview({ activeProperty, records }) {
       subtitle: activeProperty?.name ?? "",
       summaryItems: getSummaryItems(summary),
       columns: [
-        { label: "Animal", width: 18 },
+        { label: "Animal", width: 16 },
+        { label: "Idade", width: 22 },
         { label: "Pesagens", width: 10 },
         { label: "Último peso", width: 14 },
         { label: "Média", width: 14 }
       ],
       rows: aggregates.map((item) => [
         item.animalId,
+        item.ageCategoryLabel,
         item.quantity,
         `${formatNumber(item.lastWeight)} kg`,
         `${formatNumber(item.average)} kg`

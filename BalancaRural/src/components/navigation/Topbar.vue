@@ -1,4 +1,6 @@
 <script setup>
+import { computed } from "vue";
+import { useTheme } from "../../app/theme.js";
 import { icons } from "../icons/icons.js";
 
 defineProps({
@@ -13,6 +15,9 @@ defineProps({
 });
 
 defineEmits(["cycle-property", "logout", "sync-cloud"]);
+
+const { isDark, nextThemeLabel, toggleTheme } = useTheme();
+const themeIcon = computed(() => (isDark.value ? icons.sun : icons.moon));
 </script>
 
 <template>
@@ -22,6 +27,14 @@ defineEmits(["cycle-property", "logout", "sync-cloud"]);
       <span class="property-title">{{ propertyName || "Sem propriedade" }}</span>
       <span aria-hidden="true">⌄</span>
     </button>
+    <button
+      class="topbar-icon"
+      type="button"
+      :aria-label="nextThemeLabel"
+      :title="nextThemeLabel"
+      @click="toggleTheme"
+      v-html="themeIcon"
+    ></button>
     <button
       v-if="cloudConnected"
       class="topbar-menu"

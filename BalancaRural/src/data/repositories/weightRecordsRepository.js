@@ -1,5 +1,6 @@
 import { deleteOne, getDb, readAll, readOne, STORES, writeOne } from "../db/indexedDb.js";
 import { createId } from "../../utils/id.js";
+import { normalizeAgeCategory } from "../../features/weight-records/ageCategories.js";
 
 export async function listWeightRecords(propertyId, ownerId) {
   if (!ownerId) return [];
@@ -17,7 +18,7 @@ export async function listAllWeightRecords(ownerId) {
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
-export async function createWeightRecord({ propertyId, animalId, sex = "", info = "", weight, ownerId }) {
+export async function createWeightRecord({ propertyId, animalId, ageCategory = "", sex = "", info = "", weight, ownerId }) {
   if (!ownerId) throw new Error("Usuário não autenticado.");
 
   const now = new Date().toISOString();
@@ -25,6 +26,7 @@ export async function createWeightRecord({ propertyId, animalId, sex = "", info 
     id: createId("weight"),
     ownerId,
     propertyId,
+    ageCategory: normalizeAgeCategory(ageCategory),
     animalId: animalId.trim(),
     info: String(info ?? "").trim(),
     sex: normalizeSex(sex),
@@ -49,6 +51,7 @@ export async function updateWeightRecord(id, patch, ownerId) {
   const updated = {
     ...current,
     ...patch,
+    ageCategory: normalizeAgeCategory(patch.ageCategory),
     animalId: patch.animalId.trim(),
     info: String(patch.info ?? "").trim(),
     sex: normalizeSex(patch.sex),

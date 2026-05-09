@@ -1,5 +1,6 @@
 <script setup>
 import { icons } from "../icons/icons.js";
+import { AGE_CATEGORIES } from "../../features/weight-records/ageCategories.js";
 
 defineProps({
   activePropertyName: {
@@ -34,6 +35,19 @@ defineEmits(["close", "submit"]);
           <option value="">Não informado</option>
           <option value="M">Macho</option>
           <option value="F">Fêmea</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="ageCategory">Idade</label>
+        <select id="ageCategory" name="ageCategory" :value="record?.ageCategory ?? ''">
+          <option value="">Não informada</option>
+          <option
+            v-for="category in AGE_CATEGORIES"
+            :key="category.value"
+            :value="category.value"
+          >
+            {{ category.label }} - {{ category.description }}
+          </option>
         </select>
       </div>
       <div class="field">

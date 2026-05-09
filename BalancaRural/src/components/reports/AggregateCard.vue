@@ -15,6 +15,7 @@ defineProps({
       <div>
         <div class="entity-id">Animal</div>
         <div class="entity-name">{{ item.animalId }}</div>
+        <div class="record-date">{{ item.ageCategoryLabel || "Idade não informada" }}</div>
       </div>
       <div class="weight-value">{{ formatNumber(item.lastWeight) }} kg</div>
     </div>

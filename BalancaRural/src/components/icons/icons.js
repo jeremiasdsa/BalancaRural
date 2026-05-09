@@ -14,7 +14,9 @@ export const icons = {
   file: svg("M7 3h7l4 4v14H7V3ZM14 3v5h4M10 13h5M10 17h5"),
   filter: svg("M4 5h16l-6 7v5l-4 2v-7L4 5Z"),
   logout: svg("M10 17l5-5-5-5M15 12H3M12 3h7v18h-7"),
+  moon: svg("M21 14.5A8.5 8.5 0 0 1 9.5 3 7 7 0 1 0 21 14.5Z"),
   scale: svg("M12 4v16M7 7h10M5 7l-3 6h6L5 7ZM19 7l-3 6h6l-3-6ZM8 20h8"),
+  sun: svg("M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M18.4 5.6l1.4-1.4M4.2 19.8l1.4-1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"),
   arrow: svg("M9 18l6-6-6-6"),
   target: svg("M12 3v3M12 18v3M3 12h3M18 12h3M7.8 7.8l2.1 2.1M16.2 7.8l-2.1 2.1M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z")
 };
