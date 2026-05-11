@@ -72,7 +72,7 @@ const buttonLabels = {
           <button v-if="auth.mode !== 'reset'" type="button" @click="emit('mode-change', 'reset')">Esqueci a senha</button>
         </div>
         <p class="auth-note">Login, criação de conta e recuperação de senha precisam de internet. Depois de conectar, seus dados locais serão mesclados com a nuvem.</p>
-        <p class="auth-note"> V.0.9</p>
+        <p class="auth-note"> V.1.0</p>
       </template>
     </section>
   </main>
