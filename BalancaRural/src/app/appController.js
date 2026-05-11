@@ -48,6 +48,10 @@ export async function closeSheet() {
   appActions.closeSheet(getActionContext());
 }
 
+export async function clearSheetError() {
+  appActions.clearSheetError(getActionContext());
+}
+
 export async function closePdfPreview() {
   appActions.closePdfPreview(getActionContext());
 }

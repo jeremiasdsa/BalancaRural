@@ -1,6 +1,7 @@
 import { deleteOne, getDb, readAll, readOne, STORES, writeOne } from "../db/indexedDb.js";
 import { createId } from "../../utils/id.js";
 import { normalizeAgeCategory } from "../../features/weight-records/ageCategories.js";
+import { normalizeDiscard, normalizeEarring, normalizeVaccines } from "../../features/weight-records/managementInfo.js";
 
 export async function listWeightRecords(propertyId, ownerId) {
   if (!ownerId) return [];
@@ -18,7 +19,20 @@ export async function listAllWeightRecords(ownerId) {
     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 }
 
-export async function createWeightRecord({ propertyId, animalId, ageCategory = "", sex = "", info = "", weight, ownerId }) {
+export async function createWeightRecord({
+  propertyId,
+  animalId,
+  ageCategory = "",
+  discard = "",
+  earring = "",
+  vaccines = [],
+  vaccineNotes = "",
+  iron = "",
+  sex = "",
+  info = "",
+  weight,
+  ownerId
+}) {
   if (!ownerId) throw new Error("Usuário não autenticado.");
 
   const now = new Date().toISOString();
@@ -28,8 +42,13 @@ export async function createWeightRecord({ propertyId, animalId, ageCategory = "
     propertyId,
     ageCategory: normalizeAgeCategory(ageCategory),
     animalId: animalId.trim(),
+    discard: normalizeDiscard(discard),
+    earring: normalizeEarring(earring),
     info: String(info ?? "").trim(),
+    iron: String(iron ?? "").trim(),
     sex: normalizeSex(sex),
+    vaccineNotes: String(vaccineNotes ?? "").trim(),
+    vaccines: normalizeVaccines(vaccines),
     weight: Number(weight),
     timestamp: now,
     updatedAt: now
@@ -53,8 +72,13 @@ export async function updateWeightRecord(id, patch, ownerId) {
     ...patch,
     ageCategory: normalizeAgeCategory(patch.ageCategory),
     animalId: patch.animalId.trim(),
+    discard: normalizeDiscard(patch.discard),
+    earring: normalizeEarring(patch.earring),
     info: String(patch.info ?? "").trim(),
+    iron: String(patch.iron ?? "").trim(),
     sex: normalizeSex(patch.sex),
+    vaccineNotes: String(patch.vaccineNotes ?? "").trim(),
+    vaccines: normalizeVaccines(patch.vaccines),
     weight: Number(patch.weight),
     updatedAt: new Date().toISOString()
   };

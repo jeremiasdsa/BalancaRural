@@ -29,7 +29,9 @@ export function createInitialState() {
 export function createInitialFilters() {
   return {
     animalId: "",
+    discard: "",
     from: "",
+    sex: "",
     to: ""
   };
 }

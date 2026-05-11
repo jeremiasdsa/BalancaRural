@@ -1,5 +1,6 @@
 import { formatNumber } from "../../utils/format.js";
 import { formatAgeCategory } from "./ageCategories.js";
+import { formatManagementSummary } from "./managementInfo.js";
 
 export function calculateSummary(records) {
   const all = calculateWeightStats(records);
@@ -40,6 +41,7 @@ export function aggregateByAnimal(records) {
       animalId,
       ageCategory: ordered[0].ageCategory ?? "",
       ageCategoryLabel: formatAgeCategory(ordered[0].ageCategory),
+      managementSummary: formatManagementSummary(ordered[0]),
       quantity: summary.quantity,
       lastWeight: ordered[0].weight,
       max: summary.max,

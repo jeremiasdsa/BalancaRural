@@ -27,6 +27,12 @@ export function closeSheet({ render, state }) {
   render();
 }
 
+export function clearSheetError({ render, state }) {
+  if (!state.sheet?.error) return;
+  state.sheet.error = "";
+  render();
+}
+
 export function closePdfPreview({ render, state }) {
   state.pdfPreview = null;
   render();

@@ -1178,6 +1178,185 @@ button.card-main {
   font-size: 24px;
 }
 
+.weight-screen-backdrop {
+  position: fixed;
+  z-index: 55;
+  inset: 0;
+  background: var(--bg);
+}
+
+.weight-screen {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.weight-error-alert {
+  position: fixed;
+  z-index: 2;
+  top: 50%;
+  left: 50%;
+  width: min(calc(100% - 40px), 420px);
+  transform: translate(-50%, -50%);
+  padding: 14px 16px;
+  border: 1px solid rgba(220, 38, 38, 0.32);
+  border-radius: 10px;
+  background: var(--red-tint);
+  color: var(--red);
+  font-size: 15px;
+  font-weight: 900;
+  text-align: center;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+.weight-screen-header {
+  padding: calc(16px + env(safe-area-inset-top)) 16px 14px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.weight-screen-header h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.08;
+}
+
+.weight-screen-header p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.weight-screen-header strong {
+  color: var(--text);
+}
+
+.weight-screen-body {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 14px 22px;
+}
+
+.weight-screen-body > .field-error {
+  width: min(100%, 620px);
+  margin: 0 auto 10px;
+}
+
+.weight-form-section {
+  width: min(100%, 620px);
+  margin: 0 auto 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+}
+
+.weight-form-section h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.weight-form-section .field:last-child {
+  margin-bottom: 0;
+}
+
+.weight-screen-actions {
+  padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.weight-screen-actions .btn {
+  min-width: 0;
+}
+
+.segmented-field {
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+}
+
+.segmented-field legend {
+  margin-bottom: 8px;
+  font-weight: 850;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.segmented-control.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.segment-option {
+  min-width: 0;
+}
+
+.segment-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segment-option span {
+  min-height: 48px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.segment-option input:checked + span {
+  border-color: var(--green);
+  background: var(--green-tint);
+  color: var(--green-dark);
+  box-shadow: 0 0 0 2px var(--green-ring);
+}
+
+.segment-option input:focus-visible + span {
+  outline: 3px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+@media (min-width: 720px) {
+  .weight-screen-header,
+  .weight-screen-actions {
+    padding-left: calc((100% - 620px) / 2);
+    padding-right: calc((100% - 620px) / 2);
+  }
+}
+
 .preview-backdrop {
   position: fixed;
   z-index: 70;
@@ -1315,15 +1494,63 @@ button.card-main {
 }
 
 .field input,
-.field select {
+.field select,
+.field textarea {
   width: 100%;
-  height: 52px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 0 14px;
   font-size: 16px;
   background: var(--surface-soft);
   color: var(--text);
+}
+
+.field input,
+.field select {
+  height: 52px;
+  padding: 0 14px;
+}
+
+.field.field-invalid label {
+  color: var(--red);
+}
+
+.field.field-invalid input {
+  border-color: var(--red);
+  background: var(--red-tint);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.14);
+}
+
+.field textarea {
+  min-height: 92px;
+  resize: vertical;
+  padding: 12px 14px;
+}
+
+.fieldset {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.fieldset legend {
+  padding: 0 6px;
+  font-weight: 850;
+}
+
+.check-option {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-weight: 750;
+}
+
+.check-option input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--green);
 }
 
 .field-error {

@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { icons } from "../icons/icons.js";
 import { formatDateTime, formatNumber } from "../../utils/format.js";
 import { formatAgeCategory } from "../../features/weight-records/ageCategories.js";
+import { formatManagementInfo } from "../../features/weight-records/managementInfo.js";
 import { formatSex, normalizeSex } from "../../features/weight-records/weightStats.js";
 
 const props = defineProps({
@@ -27,6 +28,16 @@ const expanded = ref(props.initialExpanded);
 function toggleExpanded() {
   if (props.variant !== "dashboard") return;
   expanded.value = !expanded.value;
+}
+
+function getManagementInfo(record) {
+  return formatManagementInfo(record);
+}
+
+function getManagementInline(record) {
+  return getManagementInfo(record)
+    .map(([label, value]) => `${label}: ${value}`)
+    .join(" | ");
 }
 </script>
 
@@ -67,6 +78,7 @@ function toggleExpanded() {
         <span>{{ formatDateTime(record.timestamp) }}</span>
         <span>{{ formatSex(record.sex) || "Sexo não informado" }}</span>
         <span>{{ formatAgeCategory(record.ageCategory) || "Idade não informada" }}</span>
+        <span v-if="getManagementInfo(record).length">{{ getManagementInline(record) }}</span>
       </div>
       <div class="record-highlight weight">
         <span>Peso</span>
@@ -84,6 +96,17 @@ function toggleExpanded() {
           <span v-html="icons.target"></span>
           <strong>{{ formatAgeCategory(record.ageCategory) || "Idade não informada" }}</strong>
         </div>
+        <div
+          v-for="[label, value] in getManagementInfo(record)"
+          :key="label"
+          class="record-detail-line"
+        >
+          <span v-html="icons.check"></span>
+          <div>
+            <strong>{{ label }}</strong>
+            <p>{{ value }}</p>
+          </div>
+        </div>
         <div class="record-detail-line note-line">
           <span v-html="icons.file"></span>
           <div>
@@ -93,9 +116,18 @@ function toggleExpanded() {
         </div>
       </div>
 
-      <div v-else-if="record.info" class="record-note">
-        <strong>Observação</strong>
-        <p>{{ record.info }}</p>
+      <div v-else-if="record.info || getManagementInfo(record).length" class="record-note">
+        <div
+          v-for="[label, value] in getManagementInfo(record)"
+          :key="label"
+        >
+          <strong>{{ label }}</strong>
+          <p>{{ value }}</p>
+        </div>
+        <div v-if="record.info">
+          <strong>Observação</strong>
+          <p>{{ record.info }}</p>
+        </div>
       </div>
 
       <div class="record-actions">

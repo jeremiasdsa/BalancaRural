@@ -1,5 +1,6 @@
 <script setup>
 import { icons } from "../icons/icons.js";
+import { DISCARD_OPTIONS } from "../../features/weight-records/managementInfo.js";
 
 defineProps({
   filters: {
@@ -23,6 +24,35 @@ defineEmits(["filter-change"]);
           placeholder="Digite o código do animal"
           @input="$emit('filter-change', 'animalId', $event.target.value)"
         />
+      </div>
+      <div class="field">
+        <label for="filter-sex">Sexo</label>
+        <select
+          id="filter-sex"
+          :value="filters.sex"
+          @change="$emit('filter-change', 'sex', $event.target.value)"
+        >
+          <option value="">Todos</option>
+          <option value="M">Macho</option>
+          <option value="F">Fêmea</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="filter-discard">Descarte</label>
+        <select
+          id="filter-discard"
+          :value="filters.discard"
+          @change="$emit('filter-change', 'discard', $event.target.value)"
+        >
+          <option value="">Todos</option>
+          <option
+            v-for="option in DISCARD_OPTIONS"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
       </div>
       <div class="field">
         <label for="filter-from">Data inicial</label>

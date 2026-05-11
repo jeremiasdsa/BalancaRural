@@ -14,6 +14,7 @@ import SummaryReportScreen from "../screens/reports/summary/SummaryReportScreen.
 import { submitAuthForm } from "../features/auth/authForm.js";
 import {
   clearHistory,
+  clearSheetError,
   closePdfPreview,
   closeSheet,
   createProperty,
@@ -188,6 +189,7 @@ onMounted(() => {
           :active-property-name="snapshot.activePropertyName"
           :error="snapshot.sheet.error"
           :record="snapshot.sheet.record"
+          @clear-error="clearSheetError"
           @close="closeSheet"
           @submit="submitWeightForm"
         />
